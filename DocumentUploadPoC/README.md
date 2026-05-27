@@ -6,7 +6,7 @@ Automated worker that fetches invoices from the Comstruct platform and attaches 
 
 1. Fetches invoices in `PRICE_CHECKING` status from the Comstruct API (skips already `SYNCED` rows)
 2. For each invoice, downloads the PDF from Comstruct
-3. Appends the PDF to the matching MetaSonic document (identified by `external_id`)
+3. Inserts the PDF as the first item on the matching MetaSonic document (identified by `external_id`)
 4. Optionally sets a boolean qualifier on the document to signal the attachment
 5. Reports the result back to Comstruct (`SYNCED` or `FAILED`)
 
@@ -90,7 +90,8 @@ See `config.env.example` for a full commented template.
 
 ## PDF Filename
 
-The uploaded PDF takes the name of the first existing file in the MetaSonic document and appends `_checked_by_comstruct`:
+The uploaded PDF takes the name of the first existing file in the MetaSonic document and appends `_checked_by_comstruct`.
+It is inserted as item 1 so it appears before the original MetaSonic attachment:
 
 ```
 abc.pdf  →  abc_geprueft_von_comstruct.pdf
