@@ -346,14 +346,14 @@ namespace MetasonicDocumentUploadPoC
             try
             {
                 var itemTypeNum = MetasonicUploadHelper.GetItemTypeNumber(fileName);
-                Console.WriteLine($"  [5/5] Inserting file as first MetaSonic item on document {metasonicDocId} (ItemTypeNumber={itemTypeNum}, fileName='{fileName}')...");
-                MetasonicUploadHelper.PrependDocumentPdfItem(
+                Console.WriteLine($"  [5/5] Appending file to MetaSonic document {metasonicDocId} (ItemTypeNumber={itemTypeNum}, fileName='{fileName}')...");
+                MetasonicUploadHelper.AppendDocumentPdfItem(
                     client,
                     ref loginData,
                     metasonicDocId,
                     pdf,
                     fileName);
-                Console.WriteLine($"  [5/5] PDF inserted as first item '{fileName}'.");
+                Console.WriteLine($"  [5/5] PDF appended as '{fileName}'.");
 
                 var qualUpdates = new Dictionary<string, string>();
                 var syncedQualId = DmsEnvironment.MetasonicComstructSyncedQualifierId();
