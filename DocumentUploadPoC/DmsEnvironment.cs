@@ -38,6 +38,22 @@ namespace MetasonicDocumentUploadPoC
             return true;
         }
 
+        /// <summary>
+        /// When true (default), requests <c>GET .../pdf?overlay=true</c> so match-status boxes are embedded in the PDF.
+        /// Set <c>COMSTRUCT_PDF_OVERLAY=0</c> or <c>false</c> to omit the parameter.
+        /// </summary>
+        public static bool PdfOverlay()
+        {
+            var v = Environment.GetEnvironmentVariable("COMSTRUCT_PDF_OVERLAY");
+            if (string.Equals("0", v, StringComparison.Ordinal) ||
+                string.Equals("false", v, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            return true;
+        }
+
         public static string MetasonicEndpoint() =>
             Environment.GetEnvironmentVariable("METASONIC_ENDPOINT") ?? string.Empty;
 

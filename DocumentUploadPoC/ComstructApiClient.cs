@@ -93,15 +93,24 @@ namespace MetasonicDocumentUploadPoC
         /// When annotations=true the endpoint returns JSON { pdf_base64, file_name, ... };
         /// we decode pdf_base64 and use file_name so the correct type (PDF/TIFF/etc.) is preserved.
         /// Without annotations the endpoint returns raw bytes; filename is derived from Content-Disposition.
+        /// When overlay=true, match-status boxes are embedded in the returned PDF (can be combined with annotations).
         /// </summary>
         public (byte[] Data, string FileName)? DownloadInvoicePdf(string invoiceId)
         {
             var baseUrl = DmsEnvironment.ComstructBaseUrl();
-            var path = baseUrl + InvoicesBasePath() + "/" + Uri.EscapeDataString(invoiceId) + "/pdf";
+            var queryParts = new List<string>();
             if (DmsEnvironment.PdfAnnotations())
             {
-                path += "?annotations=true";
+                queryParts.Add("annotations=true");
             }
+
+            if (DmsEnvironment.PdfOverlay())
+            {
+                queryParts.Add("overlay=true");
+            }
+
+            var query = queryParts.Count > 0 ? "?" + string.Join("&", queryParts) : string.Empty;
+            var path = baseUrl + InvoicesBasePath() + "/" + Uri.EscapeDataString(invoiceId) + "/pdf" + query;
 
             var request = new HttpRequestMessage(HttpMethod.Get, path);
             request.Headers.Accept.ParseAdd("application/pdf");

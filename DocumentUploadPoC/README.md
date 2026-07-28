@@ -79,6 +79,7 @@ To run automatically every 5–10 minutes, use **Windows Task Scheduler**:
 | `COMSTRUCT_DMS_UPDATED_AFTER_PARAM` | No | Query param name for watermark (default: `updated_after`) |
 | `COMSTRUCT_DMS_PATCH_PATH` | No | Path template for Comstruct status PATCH |
 | `COMSTRUCT_PDF_ANNOTATIONS` | No | `false` / `0` to disable PDF annotations query param |
+| `COMSTRUCT_PDF_OVERLAY` | No | `false` / `0` to disable match-status overlay boxes in the PDF (`overlay=true`) |
 | `DMS_WORKER_STATE_FILE` | No | Path to worker state JSON (default: `.dms-worker-state.json` in cwd) |
 | `DMS_WORKER_INITIAL_UPDATED_AFTER` | No | ISO timestamp seed for first fetch watermark |
 | `DMS_WORKER_DRY_RUN` | No | `true` / `1` to avoid writes |
