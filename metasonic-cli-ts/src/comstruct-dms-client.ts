@@ -24,10 +24,23 @@ export interface ComstructDmsClientConfig {
    * Set env `COMSTRUCT_PDF_ANNOTATIONS=0` or `false` to omit the parameter (plain PDF).
    */
   pdfIncludeAnnotations: boolean;
+  /**
+   * When true (default), requests `GET .../pdf?overlay=true` so match-status boxes are embedded in the PDF.
+   * Set env `COMSTRUCT_PDF_OVERLAY=0` or `false` to omit the parameter.
+   */
+  pdfIncludeOverlay: boolean;
 }
 
 function pdfIncludeAnnotationsFromEnv(): boolean {
   const v = process.env.COMSTRUCT_PDF_ANNOTATIONS;
+  if (v === '0' || v?.toLowerCase() === 'false') {
+    return false;
+  }
+  return true;
+}
+
+function pdfIncludeOverlayFromEnv(): boolean {
+  const v = process.env.COMSTRUCT_PDF_OVERLAY;
   if (v === '0' || v?.toLowerCase() === 'false') {
     return false;
   }
@@ -52,6 +65,7 @@ function parseConfigFromEnv(): ComstructDmsClientConfig {
       process.env.COMSTRUCT_DMS_PATCH_PATH ||
       '/{prefix}/invoices/{id}/external-status',
     pdfIncludeAnnotations: pdfIncludeAnnotationsFromEnv(),
+    pdfIncludeOverlay: pdfIncludeOverlayFromEnv(),
   };
 }
 
@@ -208,6 +222,9 @@ export class ComstructDmsClient {
     const url = new URL(path);
     if (this.cfg.pdfIncludeAnnotations) {
       url.searchParams.set('annotations', 'true');
+    }
+    if (this.cfg.pdfIncludeOverlay) {
+      url.searchParams.set('overlay', 'true');
     }
     const { status, headers, body } = await requestBuffer(url.toString(), 'GET', {
       ...this.authHeaders(),
