@@ -1,9 +1,15 @@
 @echo off
-REM Build script for Metasonic Document Upload PoC
+setlocal
+cd /d "%~dp0"
+
+REM Build script for Metasonic Document Upload Worker
 REM Requires: .NET Framework 4.7.2 SDK or Visual Studio Build Tools
 
+set NO_PAUSE=0
+if /I "%~1"=="--no-pause" set NO_PAUSE=1
+
 echo ========================================
-echo Metasonic Document Upload PoC - Build
+echo Metasonic Document Upload Worker - Build
 echo ========================================
 echo.
 
@@ -36,10 +42,10 @@ if exist "C:\Program Files (x86)\Microsoft Visual Studio\2019\Professional\MSBui
     goto :build
 )
 
-REM Try vswhere to find any VS installation
+REM Try vswhere to find any VS / Build Tools installation
 set VSWHERE="%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
 if exist %VSWHERE% (
-    for /f "usebackq tokens=*" %%i in (`%VSWHERE% -latest -requires Microsoft.Component.MSBuild -find MSBuild\**\Bin\MSBuild.exe`) do (
+    for /f "usebackq tokens=*" %%i in (`%VSWHERE% -latest -products * -requires Microsoft.Component.MSBuild -find MSBuild\**\Bin\MSBuild.exe`) do (
         set MSBUILD_PATH="%%i"
         goto :build
     )
@@ -60,7 +66,7 @@ echo - Visual Studio Build Tools
 echo - .NET Framework 4.7.2 Developer Pack
 echo.
 echo Or ensure MSBuild is in your PATH
-pause
+if "%NO_PAUSE%"=="0" pause
 exit /b 1
 
 :build
@@ -81,7 +87,7 @@ echo Building Debug configuration...
 if %ERRORLEVEL% NEQ 0 (
     echo.
     echo ERROR: Build failed!
-    pause
+    if "%NO_PAUSE%"=="0" pause
     exit /b 1
 )
 
@@ -92,10 +98,7 @@ echo ========================================
 echo.
 echo Output: bin\Debug\MetasonicDocumentUploadPoC.exe
 echo.
-echo To run the PoC:
-echo   bin\Debug\MetasonicDocumentUploadPoC.exe
+echo To run the DMS upload worker:
+echo   bin\Debug\MetasonicDocumentUploadPoC.exe worker
 echo.
-echo To run with a specific file:
-echo   bin\Debug\MetasonicDocumentUploadPoC.exe "path\to\your\file.pdf"
-echo.
-pause
+if "%NO_PAUSE%"=="0" pause

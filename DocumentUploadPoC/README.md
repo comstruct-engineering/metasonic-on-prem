@@ -18,9 +18,9 @@ Automated worker that fetches invoices from the Comstruct platform and attaches 
 
 ## Setup
 
-1. Copy `config.env.example` to `config.env` and fill in values (see table below). `config.env` is gitignored and is for your reference; this PoC does not load it automatically.
+1. Copy `config.env.example` to `config.env` and fill in values (see table below). `config.env` is gitignored and automatically loaded by `run.bat` when present.
 
-2. Open `run.bat` and set the same values there (Windows sets environment variables from the batch file):
+2. Alternatively, open `run.bat` (or Windows system environment variables) and set the values there:
 
 ```bat
 set METASONIC_ENDPOINT=http://YOUR_HOST:8089/ScanviewWebservice.svc
@@ -43,11 +43,12 @@ When set, the worker writes `Ja` into this qualifier after each successful uploa
 
 ## Running
 
-Double-click `run.bat`. It will:
-- Build the project automatically on first run (requires Visual Studio Build Tools)
+Run `run.bat` (or double-click it). It will:
+- Load `config.env` if present (or fall back to environment variables in `run.bat` / Windows)
+- Build the project automatically on first run if `bin\Debug\MetasonicDocumentUploadPoC.exe` is missing (pass `run.bat --rebuild` to force a clean rebuild)
 - Connect to Comstruct and MetaSonic
 - Process all pending invoices
-- Print a summary to the console
+- Exit with the worker exit code (safe for unattended Windows Task Scheduler runs)
 
 ## Scheduling (Optional)
 

@@ -1,5 +1,11 @@
 @echo off
+setlocal
+cd /d "%~dp0"
+
 REM Build script for Metasonic CLI
+
+set NO_PAUSE=0
+if /I "%~1"=="--no-pause" set NO_PAUSE=1
 
 echo ========================================
 echo Metasonic CLI - Build
@@ -35,6 +41,15 @@ if exist "C:\Program Files (x86)\Microsoft Visual Studio\2019\Professional\MSBui
     goto :build
 )
 
+REM Try vswhere to find any VS / Build Tools installation
+set VSWHERE="%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
+if exist %VSWHERE% (
+    for /f "usebackq tokens=*" %%i in (`%VSWHERE% -latest -products * -requires Microsoft.Component.MSBuild -find MSBuild\**\Bin\MSBuild.exe`) do (
+        set MSBUILD_PATH="%%i"
+        goto :build
+    )
+)
+
 REM Try to use MSBuild from PATH
 where msbuild >nul 2>&1
 if %ERRORLEVEL% EQU 0 (
@@ -49,7 +64,7 @@ echo - Visual Studio 2019 or 2022 (any edition)
 echo - Visual Studio Build Tools
 echo - .NET Framework 4.7.2 Developer Pack
 echo.
-pause
+if "%NO_PAUSE%"=="0" pause
 exit /b 1
 
 :build
@@ -69,7 +84,7 @@ echo Building Debug configuration...
 if %ERRORLEVEL% NEQ 0 (
     echo.
     echo ERROR: Build failed!
-    pause
+    if "%NO_PAUSE%"=="0" pause
     exit /b 1
 )
 
@@ -85,4 +100,4 @@ echo   bin\Debug\MetasonicCLI --help
 echo   bin\Debug\MetasonicCLI get 1527018
 echo   bin\Debug\MetasonicCLI update 1527018 sachlich richtig
 echo.
-pause
+if "%NO_PAUSE%"=="0" pause

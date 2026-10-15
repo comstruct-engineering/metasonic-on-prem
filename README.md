@@ -20,9 +20,8 @@ For a complete overview of the integration architecture, supported workflows, an
 ## Quick start (On-Premises Windows Worker)
 
 1. Read **[DocumentUploadPoC/README.md](DocumentUploadPoC/README.md)**.
-2. Copy **`DocumentUploadPoC/config.env.example`** to **`config.env`** (local only; gitignored) as a reference for your settings.
-3. Configure **`METASONIC_*`** and **`COMSTRUCT_*`** environment variables in **`DocumentUploadPoC/run.bat`** (or system environment variables) — **never commit real credentials or API keys**.
-4. Run `run.bat` manually to verify connectivity, or schedule it every 5 minutes in **Windows Task Scheduler**.
+2. Copy **`DocumentUploadPoC/config.env.example`** to **`DocumentUploadPoC/config.env`** (local only; gitignored) and fill in your **`METASONIC_*`** and **`COMSTRUCT_*`** settings — **never commit real credentials or API keys**.
+3. Run **`DocumentUploadPoC\run.bat`** manually to verify connectivity (it automatically loads `config.env` and builds on first run), then schedule `run.bat` every 5 minutes in **Windows Task Scheduler**.
 
 ## Related documentation
 

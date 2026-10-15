@@ -52,69 +52,17 @@ namespace DmsFormular1
             InitializeComponent();
 
 			
-			// Connect
-			if (true)
-			{
-				switch (Program.ProgramMode)
-				{
-					case "BRZ365test":
-						{
-							var ep = Environment.GetEnvironmentVariable("METASONIC_ENDPOINT")
-								?? "http://127.0.0.1:8089/ScanviewWebservice.svc";
-							scanview = new ScanviewWebserviceClient("ScanviewWebserviceBasicHTTP", ep);
-							var u = Environment.GetEnvironmentVariable("METASONIC_USER") ?? "";
-							var p = Environment.GetEnvironmentVariable("METASONIC_PASSWORD") ?? "";
-							var d = Environment.GetEnvironmentVariable("METASONIC_DB") ?? "";
-							Connect(u, p, d);
-						}
-
-						break;
-
-					case "BRZ365live":
-						{
-							var ep = Environment.GetEnvironmentVariable("METASONIC_ENDPOINT")
-								?? "http://127.0.0.1:8089/ScanviewWebservice.svc";
-							scanview = new ScanviewWebserviceClient("ScanviewWebserviceBasicHTTP", ep);
-							var u = Environment.GetEnvironmentVariable("METASONIC_USER") ?? "";
-							var p = Environment.GetEnvironmentVariable("METASONIC_PASSWORD") ?? "";
-							var d = Environment.GetEnvironmentVariable("METASONIC_DB") ?? "";
-							Connect(u, p, d);
-						}
-
-						break;
-
-					case "BRZ7live":
-						{
-							var ep = Environment.GetEnvironmentVariable("METASONIC_ENDPOINT")
-								?? "http://127.0.0.1:8089/ScanviewWebservice.svc";
-							scanview = new ScanviewWebserviceClient("ScanviewWebserviceBasicHTTP", ep);
-							var u = Environment.GetEnvironmentVariable("METASONIC_USER") ?? "";
-							var p = Environment.GetEnvironmentVariable("METASONIC_PASSWORD") ?? "";
-							var d = Environment.GetEnvironmentVariable("METASONIC_DB") ?? "";
-							Connect(u, p, d);
-						}
-
-						break;
-
-					default:
-						{
-							var ep = Environment.GetEnvironmentVariable("METASONIC_ENDPOINT")
-								?? "http://127.0.0.1:8089/ScanviewWebservice.svc";
-							scanview = new ScanviewWebserviceClient("ScanviewWebserviceBasicHTTP", ep);
-							MessageBox.Show($"Ungültiger Modus: {Program.ProgramMode}. Nutze BRZ365test.", "Fehler", MessageBoxButtons.OK, MessageBoxIcon.Error);
-							var u = Environment.GetEnvironmentVariable("METASONIC_USER") ?? "";
-							var p = Environment.GetEnvironmentVariable("METASONIC_PASSWORD") ?? "";
-							var d = Environment.GetEnvironmentVariable("METASONIC_DB") ?? "";
-							Connect(u, p, d);
-						}
-
-						break;
-				}
-
-
-				
-				 // test
-			}
+            var ep = Environment.GetEnvironmentVariable("METASONIC_ENDPOINT")
+                ?? "http://127.0.0.1:8089/ScanviewWebservice.svc";
+            scanview = new ScanviewWebserviceClient("ScanviewWebserviceBasicHTTP", ep);
+            if (Program.ProgramMode != "BRZ365test" && Program.ProgramMode != "BRZ365live" && Program.ProgramMode != "BRZ7live")
+            {
+                MessageBox.Show($"Ungültiger Modus: {Program.ProgramMode}. Nutze BRZ365test.", "Fehler", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            var u = Environment.GetEnvironmentVariable("METASONIC_USER") ?? "";
+            var p = Environment.GetEnvironmentVariable("METASONIC_PASSWORD") ?? "";
+            var d = Environment.GetEnvironmentVariable("METASONIC_DB") ?? "";
+            Connect(u, p, d);
 
             CurrentDocID = docid;
 			this.Text = $"Programmversion: {CurrentProgramVersion} | DocID: {CurrentDocID}";

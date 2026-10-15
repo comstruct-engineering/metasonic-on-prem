@@ -55,7 +55,8 @@ namespace DmsFormular1
 			}
 			catch (Exception ex)
 			{
-				MessageBox.Show($"Fehler bei ApplicationRun Args0 = {args[0]} {ex.Message} {ex.StackTrace}");
+				var firstArg = args != null && args.Length > 0 ? args[0] : "(none)";
+				MessageBox.Show($"Fehler bei ApplicationRun Args0 = {firstArg} {ex.Message} {ex.StackTrace}");
 			}
 
 		}

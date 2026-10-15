@@ -219,49 +219,28 @@ namespace MetasonicDocumentUploadPoC
             byte[] fileData,
             string fileName)
         {
-            // Create RequestItem for the file
-            var item = new RequestItem
-            {
-                ItemData = fileData,
-                ItemName = "Document",
-                OriginalFileName = fileName,
-                ItemTypeNumber = GetItemTypeNumber(fileName) // Determine based on file extension
-            };
+                var item = new RequestItem
+                {
+                    ItemData = fileData,
+                    ItemName = "Document",
+                    OriginalFileName = fileName,
+                    ItemTypeNumber = MetasonicUploadHelper.GetItemTypeNumber(fileName)
+                };
 
-            // Create RequestDocument
-            var document = new RequestDocument
-            {
-                ID = null, // Null/empty for new documents - DMS will assign ID
-                DocClassID = "1", // Document class ID - NEEDS VERIFICATION
-                MainUserFolderID = null, // Optional - can be left null
-                FieldList = metadata,
-                ItemList = new[] { item }
-            };
+                // Create RequestDocument
+                var document = new RequestDocument
+                {
+                    ID = null, // Null/empty for new documents - DMS will assign ID
+                    DocClassID = DmsEnvironment.MetasonicDocClassId(),
+                    MainUserFolderID = null, // Optional - can be left null
+                    FieldList = metadata,
+                    ItemList = new[] { item }
+                };
 
-            // Upload to DMS
-            var response = client.SaveDocument(ref loginData, document);
-            return response;
-        }
-
-        /// <summary>
-        /// Determines item type number based on file extension
-        /// </summary>
-        private static int GetItemTypeNumber(string fileName)
-        {
-            string extension = Path.GetExtension(fileName)?.ToLowerInvariant();
-
-            // These are common values - actual values may need verification
-            return extension switch
-            {
-                ".pdf" => 1,    // PDF
-                ".tif" => 2,    // TIFF
-                ".tiff" => 2,   // TIFF
-                ".jpg" => 3,    // JPEG
-                ".jpeg" => 3,   // JPEG
-                ".png" => 4,    // PNG
-                _ => 1          // Default to PDF
-            };
-        }
+                // Upload to DMS
+                var response = client.SaveDocument(ref loginData, document);
+                return response;
+            }
 
         /// <summary>
         /// Gets test file path from command line args or uses default
