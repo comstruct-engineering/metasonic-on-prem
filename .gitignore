@@ -1,0 +1,43 @@
+# Build outputs
+**/bin/
+**/obj/
+[Bb]uild/
+[Ll]og/
+packages/
+
+# Certificates and signing keys (never commit)
+*.pfx
+*.p12
+*.snk
+
+# Archives (prefer source folders in Git)
+*.zip
+
+# Environment and local secrets
+.env
+.env.local
+.env.*.local
+config.env
+!*.env.example
+!**/config.env.example
+
+# Runtime / worker state
+.dms-worker-state.json
+
+# Logs and diagnostics
+*.log
+
+# IDE and OS
+.vs/
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# User-specific tooling
+*.user
+*.userosscache
+*.suo
+*.sln.docstates
