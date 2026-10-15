@@ -1,118 +1,126 @@
 # Comstruct → MetaSonic DMS Upload Worker
 
-Automated worker that fetches invoices from the Comstruct platform and attaches their PDFs to the corresponding documents in MetaSonic DMS.
+Automatisierter Hintergrund-Worker, der geprüfte Rechnungen über die Comstruct-API abruft und deren PDF-Dateien inklusive Prüfvermerken an die zugehörigen Dokumente im MetaSonic DMS anhängt.
 
-## How It Works
+## Funktionsweise
 
-1. Fetches invoices in `PRICE_CHECKING` status from the Comstruct API (skips already `SYNCED` rows)
-2. For each invoice, downloads the PDF from Comstruct
-3. Appends the PDF to the matching MetaSonic document (identified by `external_id`)
-4. Optionally sets a boolean qualifier on the document to signal the attachment
-5. Reports the result back to Comstruct (`SYNCED` or `FAILED`)
+1. Ruft Rechnungen im Status `PRICE_CHECKING` über die Comstruct-API ab (bereits als `SYNCED` markierte Belege werden übersprungen).
+2. Lädt für jede Rechnung das geprüfte PDF (inkl. Annotationen und Match-Status-Overlay) von Comstruct herunter.
+3. Hängt das PDF per `AddItem` an das zugehörige MetaSonic-Dokument an (zugeordnet über `external_id`).
+4. Setzt optional Qualifizierer am MetaSonic-Dokument (z. B. *„Geprüft von Comstruct: Ja"* sowie den Direktlink zum Beleg in Comstruct).
+5. Meldet das Ergebnis zurück an Comstruct (`SYNCED` bzw. `FAILED`).
 
-## Prerequisites
+## Voraussetzungen
 
-- Windows machine with **.NET Framework 4.7.2** or higher
-- **Visual Studio Build Tools** (for the first build)
-- Network access to both `https://api.comstruct.com` and the MetaSonic server
+- Windows Server oder Workstation mit **.NET Framework 4.7.2** oder höher
+- **Visual Studio Build Tools** (oder Visual Studio 2019/2022) für die Kompilierung beim ersten Start
+- Netzwerkzugriff auf `https://api.comstruct.com` sowie auf den lokalen MetaSonic-Server (`ScanviewWebservice.svc`)
 
-## Setup
+## Einrichtung
 
-1. Copy `config.env.example` to `config.env` and fill in values (see table below). `config.env` is gitignored and automatically loaded by `run.bat` when present.
+1. Kopieren Sie `config.env.example` nach `config.env` und tragen Sie Ihre Zugangsdaten ein (siehe Tabelle unten). `config.env` wird von Git ignoriert und beim Start von `run.bat` automatisch geladen:
 
-2. Alternatively, open `run.bat` (or Windows system environment variables) and set the values there:
+```cmd
+copy config.env.example config.env
+notepad config.env
+```
+
+2. Alternativ können Sie die Variablen direkt in `run.bat` oder als Windows-Systemumgebungsvariablen hinterlegen:
 
 ```bat
-set METASONIC_ENDPOINT=http://YOUR_HOST:8089/ScanviewWebservice.svc
-set METASONIC_USER=<username>
-set METASONIC_PASSWORD=<password>
-set METASONIC_DB=<database-name>
+set METASONIC_ENDPOINT=http://IHR_METASONIC_HOST:8089/ScanviewWebservice.svc
+set METASONIC_USER=<benutzername>
+set METASONIC_PASSWORD=<passwort>
+set METASONIC_DB=<datenbankname>
 
 set COMSTRUCT_NEST_URL=https://api.comstruct.com
 set COMSTRUCT_API_PREFIX=v1
-set COMSTRUCT_API_KEY=<your-api-key>
+set COMSTRUCT_API_KEY=<ihr-api-key>
 ```
 
-3. Optionally, set a qualifier ID to flag synced documents in MetaSonic:
+3. Optional können Sie Qualifizierer-IDs konfigurieren, die nach erfolgreichem PDF-Upload am Dokument in MetaSonic aktualisiert werden:
 
-```bat
-set METASONIC_COMSTRUCT_SYNCED_QUALIFIER_ID=<qualifier-id>
+```ini
+METASONIC_COMSTRUCT_SYNCED_QUALIFIER_ID=<qualifier-id>
+METASONIC_COMSTRUCT_URL_QUALIFIER_ID=<qualifier-id>
 ```
 
-When set, the worker writes `Ja` into this qualifier after each successful upload, so users can see _"Geprüft von Comstruct: Ja"_ in the document metadata panel.
+Wenn `METASONIC_COMSTRUCT_SYNCED_QUALIFIER_ID` gesetzt ist, schreibt der Worker nach jedem erfolgreichen Upload `Ja` in dieses Feld (z. B. *„Geprüft von Comstruct: Ja"*). Wenn `METASONIC_COMSTRUCT_URL_QUALIFIER_ID` gesetzt ist, wird dort die Beleg-URL `https://app.comstruct.com/invoices/{id}` hinterlegt.
 
-## Running
+## Ausführen
 
-Run `run.bat` (or double-click it). It will:
-- Load `config.env` if present (or fall back to environment variables in `run.bat` / Windows)
-- Build the project automatically on first run if `bin\Debug\MetasonicDocumentUploadPoC.exe` is missing (pass `run.bat --rebuild` to force a clean rebuild)
-- Connect to Comstruct and MetaSonic
-- Process all pending invoices
-- Exit with the worker exit code (safe for unattended Windows Task Scheduler runs)
+Starten Sie `run.bat` über die Eingabeaufforderung oder per Doppelklick:
 
-## Scheduling (Optional)
+- Lädt `config.env`, sofern vorhanden (oder verwendet gesetzte Umgebungsvariablen)
+- Kompiliert das Projekt beim ersten Start automatisch, falls `bin\Debug\MetasonicDocumentUploadPoC.exe` noch nicht vorhanden ist (mit `run.bat --rebuild` erzwingen Sie einen Neu-Build)
+- Verbindet sich mit Comstruct und MetaSonic
+- Verarbeitet alle ausstehenden Rechnungen
+- Beendet sich mit dem Exit-Code des Workers (geeignet für die unbeaufsichtigte Ausführung in der Windows Aufgabenplanung)
 
-To run automatically every 5–10 minutes, use **Windows Task Scheduler**:
+## Zeitgesteuerte Ausführung (Windows Aufgabenplanung)
 
-1. Open Task Scheduler → **Create Basic Task**
+Um den Worker automatisch alle 5 Minuten auszuführen, richten Sie eine Aufgabe in der **Windows Aufgabenplanung** ein:
+
+1. Aufgabenplanung öffnen → **Aufgabe erstellen...**
 2. Name: `Comstruct DMS Upload`
-3. Trigger: Daily → repeat every 5 minutes for 1 day
-4. Action: Start a program → point to `run.bat`, set _Start in_ to the folder path
-5. Enable "Run whether user is logged on or not"
+3. Trigger: **Täglich** → **Wiederholen jede: 5 Minuten**
+4. Aktion: **Programm starten** → Pfad zu `run.bat` auswählen und unter **Starten in** den Ordnerpfad von `DocumentUploadPoC` eintragen
+5. Option **Unabhängig von der Benutzeranmeldung ausführen** aktivieren
 
-## Environment Variables
+## Umgebungsvariablen
 
-| Variable | Required | Description |
+| Variable | Pflicht | Beschreibung |
 |---|---|---|
-| `COMSTRUCT_NEST_URL` | Yes | Comstruct API base URL (default in code: `https://api.comstruct.com`) |
-| `COMSTRUCT_API_KEY` | Yes | Comstruct API key (sent as `x-api-key`) |
-| `COMSTRUCT_API_PREFIX` | Yes | API path prefix (default in code: `v1`) |
-| `METASONIC_ENDPOINT` | Yes | MetaSonic Scanview SOAP URL |
-| `METASONIC_USER` | Yes | MetaSonic username |
-| `METASONIC_PASSWORD` | Yes | MetaSonic password |
-| `METASONIC_DB` | Yes | MetaSonic database name (login screen) |
-| `METASONIC_DOC_CLASS_ID` | No | Document class ID (default: `1`) |
-| `METASONIC_COMSTRUCT_INVOICE_QUALIFIER_ID` | No | MetaSonic qualifier for Comstruct invoice id |
-| `METASONIC_SEARCH_USER_FOLDER_ID` | No | User folder hint for searches |
-| `METASONIC_DMS_CORRELATION_KEY` | No | `external_id` (default) or `id` for invoice ↔ document matching |
-| `COMSTRUCT_DMS_QUEUE_STATUS` | No | Invoice status filter (default: `PRICE_CHECKING`) |
-| `COMSTRUCT_DMS_LIMIT` | No | Page size 1–500 (default: `50`) |
-| `COMSTRUCT_DMS_UPDATED_AFTER_PARAM` | No | Query param name for watermark (default: `updated_after`) |
-| `COMSTRUCT_DMS_PATCH_PATH` | No | Path template for Comstruct status PATCH |
-| `COMSTRUCT_PDF_ANNOTATIONS` | No | `false` / `0` to disable PDF annotations query param |
-| `COMSTRUCT_PDF_OVERLAY` | No | `false` / `0` to disable match-status overlay boxes in the PDF (`overlay=true`) |
-| `DMS_WORKER_STATE_FILE` | No | Path to worker state JSON (default: `.dms-worker-state.json` in cwd) |
-| `DMS_WORKER_INITIAL_UPDATED_AFTER` | No | ISO timestamp seed for first fetch watermark |
-| `DMS_WORKER_DRY_RUN` | No | `true` / `1` to avoid writes |
-| `DMS_WORKER_ALLOW_CREATE_DMS_DOCUMENT` | No | `true` / `1` to create MetaSonic docs when missing |
-| `METASONIC_COMSTRUCT_SYNCED_QUALIFIER_ID` | No | Qualifier ID; worker writes `Ja` after success |
-| `METASONIC_COMSTRUCT_URL_QUALIFIER_ID` | No | Qualifier ID for Comstruct invoice URL |
+| `COMSTRUCT_NEST_URL` | Ja | Basis-URL der Comstruct-API (Standard: `https://api.comstruct.com`) |
+| `COMSTRUCT_API_KEY` | Ja | Comstruct API-Key (wird als Header `x-api-key` gesendet) |
+| `COMSTRUCT_API_PREFIX` | Ja | API-Pfad-Präfix (Standard: `v1`) |
+| `METASONIC_ENDPOINT` | Ja | MetaSonic Scanview SOAP-URL (`http://...:8089/ScanviewWebservice.svc`) |
+| `METASONIC_USER` | Ja | MetaSonic-Benutzername |
+| `METASONIC_PASSWORD` | Ja | MetaSonic-Passwort |
+| `METASONIC_DB` | Ja | MetaSonic-Datenbankname (wie im Login-Dialog) |
+| `METASONIC_DOC_CLASS_ID` | Nein | Dokumentklassen-ID (Standard: `1`) |
+| `METASONIC_COMSTRUCT_INVOICE_QUALIFIER_ID` | Nein | MetaSonic-Qualifizierer-ID für die Comstruct-Rechnungs-ID |
+| `METASONIC_SEARCH_USER_FOLDER_ID` | Nein | Optionale Benutzermappen-ID für Suchanfragen |
+| `METASONIC_DMS_CORRELATION_KEY` | Nein | `external_id` (Standard) oder `id` für die Zuordnung Rechnung ↔ DMS-Dokument |
+| `COMSTRUCT_DMS_QUEUE_STATUS` | Nein | Rechnungsstatus-Filter (Standard: `PRICE_CHECKING`) |
+| `COMSTRUCT_DMS_LIMIT` | Nein | Seitengröße 1–500 (Standard: `50`) |
+| `COMSTRUCT_DMS_UPDATED_AFTER_PARAM` | Nein | Query-Parametername für Zeitstempel-Filter (Standard: `updated_after`) |
+| `COMSTRUCT_DMS_PATCH_PATH` | Nein | Pfad-Vorlage für das Status-Update bei Comstruct |
+| `COMSTRUCT_PDF_ANNOTATIONS` | Nein | `false` / `0` deaktiviert das Einbetten von PDF-Annotationen |
+| `COMSTRUCT_PDF_OVERLAY` | Nein | `false` / `0` deaktiviert die Match-Status-Boxen im PDF (`overlay=true`) |
+| `DMS_WORKER_STATE_FILE` | Nein | Pfad zur Statusdatei des Workers (Standard: `.dms-worker-state.json`) |
+| `DMS_WORKER_INITIAL_UPDATED_AFTER` | Nein | Initialer ISO-Zeitstempel für den ersten Abruf |
+| `DMS_WORKER_DRY_RUN` | Nein | `true` / `1` aktiviert den Simulationsmodus ohne Schreibzugriffe |
+| `DMS_WORKER_ALLOW_CREATE_DMS_DOCUMENT` | Nein | `true` / `1` erlaubt das Neuanlegen von Dokumenten, falls keines gefunden wird |
+| `METASONIC_COMSTRUCT_SYNCED_QUALIFIER_ID` | Nein | Qualifizierer-ID; Worker schreibt `Ja` nach erfolgreichem Upload |
+| `METASONIC_COMSTRUCT_URL_QUALIFIER_ID` | Nein | Qualifizierer-ID für den Direktlink zur Rechnung in Comstruct |
 
-See `config.env.example` for a full commented template.
+Siehe `config.env.example` für eine vollständig kommentierte Vorlage.
 
-## PDF Filename
+## Dateiname des angehängten PDFs
 
-The uploaded PDF takes the name of the first existing file in the MetaSonic document and appends `_geprueft_von_comstruct`:
+Das hochgeladene PDF übernimmt den Dateinamen der ersten bestehenden Datei am MetaSonic-Dokument und ergänzt das Suffix `_geprueft_von_comstruct`:
 
 ```
-abc.pdf  →  abc_geprueft_von_comstruct.pdf
+eingangsrechnung.pdf  →  eingangsrechnung_geprueft_von_comstruct.pdf
 ```
 
-If the existing item name cannot be read, it falls back to `Comstruct_Rechnung_{invoice_number}.pdf`.
+Falls der bestehende Dateiname nicht ermittelt werden kann, wird `Comstruct_Rechnung_{Rechnungsnummer}.pdf` verwendet.
 
-## Project Structure
+## Projektstruktur
 
 ```
 DocumentUploadPoC/
-├── run.bat                   # Entry point — build + run
-├── build.bat                 # Build script (MSBuild)
-├── config.env.example        # Environment variable template
-├── Program.cs                # CLI entry point
-├── DmsUploadWorker.cs        # Main worker loop
-├── ComstructApiClient.cs     # Comstruct REST API client
-├── MetasonicUploadHelper.cs  # MetaSonic SOAP helpers
-├── DmsEnvironment.cs         # Environment variable config
-├── DocumentUploadPoC.csproj  # Project file
+├── run.bat                   # Standard-Startskript (lädt config.env, kompiliert bei Bedarf und startet Worker)
+├── build.bat                 # MSBuild-Kompilierungsskript
+├── config.env.example        # Vorlage für Umgebungsvariablen
+├── Program.cs                # Einstiegspunkt (Worker-Modus & interaktiver Upload-Test)
+├── DmsUploadWorker.cs        # Hauptlogik des Synchronisations-Workers
+├── ComstructApiClient.cs     # HTTP-Client für die Comstruct REST-API
+├── MetasonicUploadHelper.cs  # Hilfsmethoden für MetaSonic SOAP-Uploads & Qualifizierer-Updates
+├── MetasonicSearchHelper.cs  # Hilfsmethoden für die Dokumentensuche in MetaSonic
+├── DmsEnvironment.cs         # Auslesen der Umgebungsvariablen
+├── DocumentUploadPoC.csproj  # C#-Projektdatei (.NET Framework 4.7.2)
 └── ScanviewWebservice/
-    └── Reference.cs          # Generated MetaSonic WCF client
+    └── Reference.cs          # Generierter MetaSonic WCF-Client
 ```

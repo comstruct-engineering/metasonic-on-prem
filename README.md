@@ -1,26 +1,26 @@
-# Comstruct ↔ MetaSonic DMS On-Premises Sync (.NET / C#)
+# Comstruct ↔ MetaSonic DMS On-Premise-Synchronisation (.NET / C#)
 
-On-premises Windows synchronization worker and C# examples for integrating **Comstruct** with **MetaSonic Scanview DMS** (for **BRZ 7**, **BRZ 8**, and **BRZ 365** environments).
+On-Premise-Synchronisations-Worker für Windows sowie C#-Beispiele zur Anbindung von **Comstruct** an das **MetaSonic Scanview DMS** (für **BRZ 7**, **BRZ 8** und **BRZ 365**).
 
-Because BRZ does not expose a third-party REST API for document workflows, Comstruct integrates directly with the **MetaSonic Scanview SOAP/WCF webservice** (`ScanviewWebservice.svc`). This repository provides the standard on-premises C# synchronization worker (`DocumentUploadPoC`) along with a CLI tool (`MetasonicCLI`) and C# code examples showing how to synchronize documents, attach verified invoice PDFs, and update document qualifiers.
+Da BRZ keine offene Drittanbieter-REST-API für Dokumenten-Workflows bereitstellt, erfolgt die Integration direkt über den **MetaSonic Scanview SOAP/WCF-Webservice** (`ScanviewWebservice.svc`). Dieses Repository enthält den standardmäßigen C#-Synchronisations-Worker (`DocumentUploadPoC`), ein Kommandozeilen-Tool (`MetasonicCLI`) sowie C#-Codebeispiele zum Synchronisieren von Belegen, Anhängen geprüfter Rechnungs-PDFs und Aktualisieren von Qualifizierern (Metadatenfeldern).
 
-For the complete functional guide (workflows, BRZ master data CSV setup, and qualifier configuration), see the Comstruct Knowledge Base article:
-**[BRZ und Metasonic DMS an comstruct anbinden](https://knowledge.comstruct.com/articles/1464016790-brz-metasonic-x-comstruct-anbindung)**
+Eine vollständige fachliche Übersicht (Integrationsvarianten, BRZ-Stammdaten-CSV-Austausch und Qualifizierer-Konfiguration) finden Sie im Comstruct Knowledge-Base-Artikel:
+**[BRZ und Metasonic DMS an comstruct anbinden: Rechnungen, Lieferscheine und Stammdaten synchronisieren](https://knowledge.comstruct.com/articles/1464016790-brz-metasonic-x-comstruct-anbindung)**
 
 ---
 
-## Standard Way to Run the Sync Worker
+## Standard-Ausführung (On-Premise Windows Worker)
 
-### Prerequisites
+### Voraussetzungen
 
-- **Windows Server** or workstation with **.NET Framework 4.7.2+**
-- **Visual Studio Build Tools** (or Visual Studio 2019/2022) installed for compiling the worker on first run
-- Outbound HTTPS access to `https://api.comstruct.com`
-- Local network access to your MetaSonic Scanview endpoint (e.g. `http://YOUR_METASONIC_HOST:8089/ScanviewWebservice.svc`)
+- **Windows Server** (oder Windows-Workstation) mit **.NET Framework 4.7.2** oder höher
+- **Visual Studio Build Tools** (oder Visual Studio 2019/2022) zum einmaligen Kompilieren des Workers beim ersten Start
+- Ausgehender HTTPS-Zugriff auf `https://api.comstruct.com` (Port 443)
+- Netzwerkzugriff auf den lokalen MetaSonic Scanview-Endpunkt (z. B. `http://IHR_METASONIC_HOST:8089/ScanviewWebservice.svc`)
 
-### Step 1: Configure `config.env`
+### Schritt 1: `config.env` konfigurieren
 
-Copy the template file and fill in your MetaSonic and Comstruct credentials (`config.env` is gitignored so your credentials are never committed):
+Kopieren Sie die Beispiel-Konfigurationsdatei und tragen Sie Ihre Zugangsdaten für MetaSonic und Comstruct ein (`config.env` ist in `.gitignore` ausgeschlossen, sodass keine Zugangsdaten versehentlich committet werden):
 
 ```cmd
 cd DocumentUploadPoC
@@ -28,72 +28,72 @@ copy config.env.example config.env
 notepad config.env
 ```
 
-Minimal required settings in `DocumentUploadPoC\config.env`:
+Erforderliche Mindesteinstellungen in `DocumentUploadPoC\config.env`:
 
 ```ini
 # Comstruct REST API
 COMSTRUCT_NEST_URL=https://api.comstruct.com
 COMSTRUCT_API_PREFIX=v1
-COMSTRUCT_API_KEY=your_comstruct_api_key
+COMSTRUCT_API_KEY=ihr_comstruct_api_key
 
-# MetaSonic Scanview SOAP/WCF Webservice
-METASONIC_ENDPOINT=http://YOUR_METASONIC_HOST:8089/ScanviewWebservice.svc
-METASONIC_USER=your_metasonic_user
-METASONIC_PASSWORD=your_metasonic_password
-METASONIC_DB=your_metasonic_database
+# MetaSonic Scanview SOAP/WCF-Webservice
+METASONIC_ENDPOINT=http://IHR_METASONIC_HOST:8089/ScanviewWebservice.svc
+METASONIC_USER=ihr_metasonic_benutzer
+METASONIC_PASSWORD=ihr_metasonic_passwort
+METASONIC_DB=ihre_metasonic_datenbank
 
-# Optional: MetaSonic qualifier IDs updated after each synced invoice
+# Optional: MetaSonic Qualifizierer-IDs, die nach erfolgreichem Sync gesetzt werden
 METASONIC_COMSTRUCT_SYNCED_QUALIFIER_ID=
 METASONIC_COMSTRUCT_URL_QUALIFIER_ID=
 ```
 
-### Step 2: Run Manually (Build + Sync)
+### Schritt 2: Manuell ausführen (Kompilieren + Synchronisieren)
 
-Run **`DocumentUploadPoC\run.bat`**:
+Führen Sie **`DocumentUploadPoC\run.bat`** aus:
 
 ```cmd
 cd DocumentUploadPoC
 run.bat
 ```
 
-What `run.bat` does:
-1. Automatically loads `config.env` from the `DocumentUploadPoC` directory (or uses system environment variables if already set).
-2. Builds `bin\Debug\MetasonicDocumentUploadPoC.exe` via MSBuild if not yet compiled (pass `run.bat --rebuild` to force a clean rebuild).
-3. Runs `MetasonicDocumentUploadPoC.exe worker` to synchronize all pending invoices between Comstruct and MetaSonic DMS.
-4. Returns exit code `0` on success or `1` on failure (without blocking on interactive prompts).
+Was `run.bat` automatisch ausführt:
+1. Lädt die lokale `config.env` aus dem Verzeichnis `DocumentUploadPoC` (oder nutzt bestehende Windows-Systemumgebungsvariablen).
+2. Kompiliert `bin\Debug\MetasonicDocumentUploadPoC.exe` über MSBuild, sofern die `.exe` noch nicht existiert (mit `run.bat --rebuild` erzwingen Sie jederzeit einen sauberen Neu-Build).
+3. Startet `MetasonicDocumentUploadPoC.exe worker` und synchronisiert alle offenen Rechnungen zwischen Comstruct und MetaSonic DMS.
+4. Beendet sich direkt mit Exit-Code `0` (Erfolg) bzw. `1` (Fehler) ohne blockierende `pause`-Abfrage.
 
-> **Dry-Run Mode:** To test connectivity and see which invoices would be processed without modifying MetaSonic or Comstruct, set `DMS_WORKER_DRY_RUN=true` in `config.env` before running `run.bat`.
+> **Dry-Run-Modus (Testlauf ohne Schreibzugriffe):** Um die Verbindung zu testen und zu prüfen, welche Rechnungen verarbeitet würden, ohne Daten in MetaSonic oder Comstruct zu verändern, setzen Sie `DMS_WORKER_DRY_RUN=true` in der `config.env` und starten Sie `run.bat`.
 
-### Step 3: Schedule Automated Sync (Windows Task Scheduler)
+### Schritt 3: Automatische Ausführung einrichten (Windows Aufgabenplanung)
 
-In production, schedule `run.bat` to run every 5 minutes:
+Für den produktiven Betrieb wird `run.bat` über die **Windows Aufgabenplanung (Task Scheduler)** alle 5 Minuten ausgeführt:
 
-1. Open **Windows Task Scheduler** → **Create Task...**
-2. **General** tab:
+1. **Aufgabenplanung** öffnen → **Aufgabe erstellen...**
+2. Reiter **Allgemein**:
    - Name: `Comstruct MetaSonic DMS Sync`
-   - Select **Run whether user is logged on or not**
-3. **Triggers** tab:
-   - **New...** → Daily → **Repeat task every: 5 minutes** for a duration of **Indefinitely**
-4. **Actions** tab:
-   - **New...** → Action: **Start a program**
-   - **Program/script:** `C:\path\to\metasonic-on-prem\DocumentUploadPoC\run.bat`
-   - **Start in:** `C:\path\to\metasonic-on-prem\DocumentUploadPoC`
+   - Option **Unabhängig von der Benutzeranmeldung ausführen** aktivieren
+3. Reiter **Trigger**:
+   - **Neu...** → Täglich → **Wiederholen jede: 5 Minuten** für die Dauer **Unbegrenzt**
+4. Reiter **Aktionen**:
+   - **Neu...** → Aktion: **Programm starten**
+   - **Programm/Skript:** `C:\Pfad\zu\metasonic-on-prem\DocumentUploadPoC\run.bat`
+   - **Starten in:** `C:\Pfad\zu\metasonic-on-prem\DocumentUploadPoC`
 
 ---
 
-## How Synchronization Works & C# Examples
+## Ablauf der Synchronisation & C#-Codebeispiele
 
-### 1. Automated Comstruct → MetaSonic Invoice Sync (`DmsUploadWorker.cs`)
+### 1. Automatische Rechnungs-Synchronisation Comstruct → MetaSonic (`DmsUploadWorker.cs`)
 
-On each run, the worker (`MetasonicDocumentUploadPoC.exe worker`) performs the following steps:
+Bei jedem Durchlauf führt der Worker (`MetasonicDocumentUploadPoC.exe worker`) folgende Schritte aus:
 
-1. **Fetch pending invoices from Comstruct** (`GET /v1/invoices?status=PRICE_CHECKING&limit=50&offset=0`), skipping any invoice where `external_status` is already `SYNCED`.
-2. **Download the verified PDF** (`GET /v1/invoices/{id}/pdf?annotations=true&overlay=true`), which includes Comstruct's verification stamps/annotations and match-status overlay boxes.
-3. **Append the verified PDF to the existing MetaSonic document** (`AddItem`), naming the attachment `<original_filename>_geprueft_von_comstruct.pdf` so the original invoice file remains untouched alongside the verified copy.
-4. **Update MetaSonic document qualifiers** (`SaveDocument`), such as setting *"Geprüft von Comstruct"* (`METASONIC_COMSTRUCT_SYNCED_QUALIFIER_ID`) to `Ja` and writing the Comstruct invoice deep link (`https://app.comstruct.com/invoices/{id}`) into `METASONIC_COMSTRUCT_URL_QUALIFIER_ID`.
-5. **Acknowledge sync in Comstruct** (`PATCH /v1/invoices/{id}/external-status` with `{"external_status": "SYNCED"}` and `POST /v1/invoices/callback`).
+1. **Abruf zu synchronisierender Rechnungen aus Comstruct** (`GET /v1/invoices?status=PRICE_CHECKING&limit=50&offset=0`), wobei bereits synchronisierte Belege (`external_status = SYNCED`) übersprungen werden.
+2. **Download des geprüften Rechnungs-PDFs** (`GET /v1/invoices/{id}/pdf?annotations=true&overlay=true`) inklusive Prüfvermerken/Annotationen und Abgleich-Markierungen aus Comstruct.
+3. **Anhängen des geprüften PDFs an das bestehende MetaSonic-Dokument** (`AddItem`) unter dem Dateinamen `<Originaldateiname>_geprueft_von_comstruct.pdf`. Das ursprüngliche Rechnungsdokument bleibt unverändert erhalten.
+4. **Aktualisieren der Qualifizierer in MetaSonic** (`SaveDocument`), z. B. Setzen von *„Geprüft von Comstruct"* (`METASONIC_COMSTRUCT_SYNCED_QUALIFIER_ID`) auf `Ja` sowie Speichern des direkten Comstruct-Beleglinks (`https://app.comstruct.com/invoices/{id}`) in `METASONIC_COMSTRUCT_URL_QUALIFIER_ID`.
+5. **Rückmeldung des Synchronisationsstatus an Comstruct** (`PATCH /v1/invoices/{id}/external-status` mit `{"external_status": "SYNCED"}` sowie `POST /v1/invoices/callback`).
 
-#### Example: Appending a Verified PDF & Updating Qualifiers in C#
+#### C#-Beispiel: Geprüftes PDF anhängen & Qualifizierer aktualisieren
 
 ```csharp
 using System.Collections.Generic;
@@ -102,13 +102,13 @@ using System.ServiceModel;
 using DmsFormular1.ScanviewWebservice;
 using MetasonicDocumentUploadPoC;
 
-// 1. Connect and authenticate to MetaSonic Scanview WCF service
+// 1. Verbindung zum MetaSonic Scanview WCF-Webservice aufbauen und anmelden
 var binding = new BasicHttpBinding
 {
     MaxReceivedMessageSize = int.MaxValue,
     MaxBufferSize = int.MaxValue
 };
-var endpoint = new EndpointAddress("http://YOUR_METASONIC_HOST:8089/ScanviewWebservice.svc");
+var endpoint = new EndpointAddress("http://IHR_METASONIC_HOST:8089/ScanviewWebservice.svc");
 var client = new ScanviewWebserviceClient(binding, endpoint);
 
 var loginData = new LoginData
@@ -116,31 +116,31 @@ var loginData = new LoginData
     AutoLogin = true,
     NoSession = true,
     UseSSO = false,
-    Username = "your_metasonic_user",
-    Password = "your_metasonic_password",
-    LoginDatabaseName = "your_metasonic_db"
+    Username = "ihr_metasonic_benutzer",
+    Password = "ihr_metasonic_passwort",
+    LoginDatabaseName = "ihre_metasonic_datenbank"
 };
 client.Login(ref loginData);
 
 string metasonicDocId = "1527018";
-byte[] pdfBytes = File.ReadAllBytes(@"C:\Temp\invoice_geprueft_von_comstruct.pdf");
+byte[] pdfBytes = File.ReadAllBytes(@"C:\Temp\rechnung_geprueft_von_comstruct.pdf");
 
-// 2. Append the verified PDF attachment to the existing MetaSonic document
+// 2. Geprüftes PDF als zusätzliches Item an das bestehende MetaSonic-Dokument anhängen
 MetasonicUploadHelper.AppendDocumentPdfItem(
     client,
     ref loginData,
     metasonicDocId,
     pdfBytes,
-    "invoice_geprueft_von_comstruct.pdf"
+    "rechnung_geprueft_von_comstruct.pdf"
 );
 
-// 3. Update qualifiers on the MetaSonic document (e.g. Sachlich, Preislich, Comstruct URL)
+// 3. Qualifizierer am MetaSonic-Dokument aktualisieren (z. B. Sachlich, Preislich, Comstruct-Link)
 var qualifierUpdates = new Dictionary<string, string>
 {
     ["223"] = "richtig",                                         // Sachlich geprüft
     ["222"] = "richtig",                                         // Preislich geprüft
-    ["YOUR_SYNCED_QUALIFIER_ID"] = "Ja",                         // Geprüft von Comstruct
-    ["YOUR_URL_QUALIFIER_ID"] = "https://app.comstruct.com/invoices/inv_123"
+    ["IHRE_SYNCED_QUALIFIER_ID"] = "Ja",                         // Geprüft von Comstruct
+    ["IHRE_URL_QUALIFIER_ID"] = "https://app.comstruct.com/invoices/inv_123"
 };
 
 MetasonicUploadHelper.SetDocumentQualifiers(
@@ -153,17 +153,17 @@ MetasonicUploadHelper.SetDocumentQualifiers(
 
 ---
 
-### 2. Creating a New Document with File & Metadata (`Program.cs`)
+### 2. Neues Dokument inkl. Datei & Metadaten in MetaSonic anlegen (`Program.cs`)
 
-To test creating a brand-new document in MetaSonic DMS with qualifiers (Kreditor, Belegnummer, Betrag, Sachlich, Preislich) and an attached PDF:
+Um ein komplett neues Dokument mit Qualifizierern (Kreditor, Belegnummer, Betrag, Sachlich, Preislich) und einer PDF-Datei in MetaSonic DMS anzulegen:
 
 ```cmd
 cd DocumentUploadPoC
 build.bat
-bin\Debug\MetasonicDocumentUploadPoC.exe "C:\path\to\invoice.pdf"
+bin\Debug\MetasonicDocumentUploadPoC.exe "C:\Pfad\zur\rechnung.pdf"
 ```
 
-#### Example: Creating a New Document in C#
+#### C#-Beispiel: Neues Dokument in MetaSonic erstellen
 
 ```csharp
 var metadata = new[]
@@ -171,57 +171,57 @@ var metadata = new[]
     new RequestField { ID = "89900207", Value = "Muster Lieferant GmbH" }, // Kreditor
     new RequestField { ID = "89900202", Value = "RE-2026-0042" },          // Belegnummer
     new RequestField { ID = "89900131", Value = "1250.50" },               // Betrag (Netto)
-    new RequestField { ID = "223",      Value = "ungeprüft" },             // Sachlich
-    new RequestField { ID = "222",      Value = "ungeprüft" }              // Preislich
+    new RequestField { ID = "223",      Value = "ungeprüft" },             // Sachlich geprüft
+    new RequestField { ID = "222",      Value = "ungeprüft" }              // Preislich geprüft
 };
 
 ResponseDocument created = MetasonicUploadHelper.SaveNewDocument(
     client,
     ref loginData,
     metadata,
-    File.ReadAllBytes(@"C:\path\to\invoice.pdf"),
-    "invoice.pdf",
+    File.ReadAllBytes(@"C:\Pfad\zur\rechnung.pdf"),
+    "rechnung.pdf",
     docClassId: "1"
 );
 ```
 
 ---
 
-### 3. Inspecting and Updating Qualifiers via CLI (`MetasonicCLI`)
+### 3. Qualifizierer per Kommandozeile abfragen und aktualisieren (`MetasonicCLI`)
 
-`MetasonicCLI` provides a command-line interface for inspecting documents, searching by correlation qualifier, updating individual qualifiers, or triggering the sync worker:
+Mit `MetasonicCLI` lassen sich Dokumente und deren Qualifizierer direkt über die Kommandozeile oder aus eigenen Skripten heraus abfragen, suchen und aktualisieren:
 
 ```cmd
 cd MetasonicCLI
 build.bat
 
-REM View all qualifiers on a MetaSonic document
+REM Alle Qualifizierer eines MetaSonic-Dokuments anzeigen
 bin\Debug\MetasonicCLI.exe get 1527018
 
-REM Update "Sachlich geprüft" (qualifier 223) or "Preislich geprüft" (qualifier 222)
+REM "Sachlich geprüft" (Qualifizierer 223) oder "Preislich geprüft" (Qualifizierer 222) setzen
 bin\Debug\MetasonicCLI.exe update 1527018 sachlich richtig
 bin\Debug\MetasonicCLI.exe update 1527018 preislich richtig
 
-REM Search for a MetaSonic document by its correlation value (e.g. external_id)
+REM MetaSonic-Dokument anhand des Korrelationswerts (z. B. external_id) suchen
 bin\Debug\MetasonicCLI.exe search EXT-2026-001
 
-REM Run the Comstruct → MetaSonic sync worker
+REM Comstruct → MetaSonic Synchronisations-Worker über die CLI starten
 bin\Debug\MetasonicCLI.exe worker
 ```
 
 ---
 
-## Repository Structure
+## Projektstruktur
 
-All projects are included in **`MetasonicFormular.sln`** and target **.NET Framework 4.7.2**:
+Alle Projekte sind in der Visual-Studio-Solution **`MetasonicFormular.sln`** enthalten und basieren auf **.NET Framework 4.7.2**:
 
-| Path | Description |
-|------|-------------|
-| **`DocumentUploadPoC/`** | **Primary on-premises synchronization worker (`run.bat`)** and C# client library (`DmsUploadWorker.cs`, `ComstructApiClient.cs`, `MetasonicUploadHelper.cs`, `MetasonicSearchHelper.cs`). |
-| **`MetasonicCLI/`** | C# command-line tool (`MetasonicCLI.exe`) for reading, searching, and updating document qualifiers (`get`, `update`, `search`, `worker`). |
-| **`DmsFormular1.csproj`** (`Form1.cs`) | Windows Forms utility for viewing and updating document verification status (`Sachlich` / `Preislich`) interactively. |
-| **`METASONIC-WEBSERVICE_DEMO/`** | Minimal Windows Forms demo showing raw WCF `GetDocument` and `UpdateDocumentFields` calls. |
+| Pfad | Beschreibung |
+|------|--------------|
+| **`DocumentUploadPoC/`** | **Primärer On-Premise-Synchronisations-Worker (`run.bat`)** und C#-Client-Bibliothek (`DmsUploadWorker.cs`, `ComstructApiClient.cs`, `MetasonicUploadHelper.cs`, `MetasonicSearchHelper.cs`). Details siehe [DocumentUploadPoC/README.md](DocumentUploadPoC/README.md). |
+| **`MetasonicCLI/`** | C#-Kommandozeilen-Tool (`MetasonicCLI.exe`) zum Auslesen, Suchen und Aktualisieren von Dokument-Qualifizierern (`get`, `update`, `search`, `worker`). Details siehe [MetasonicCLI/README.md](MetasonicCLI/README.md). |
+| **`DmsFormular1.csproj`** (`Form1.cs`) | Windows-Forms-Anwendung zur interaktiven Anzeige und Bearbeitung des Prüfstatus (`Sachlich` / `Preislich`). |
+| **`METASONIC-WEBSERVICE_DEMO/`** | Minimales Windows-Forms-Beispielprojekt für direkte WCF-Aufrufe (`GetDocument` und `UpdateDocumentFields`). |
 
-## License
+## Lizenz
 
-Released under the [MIT License](LICENSE).
+Veröffentlicht unter der [MIT-Lizenz](LICENSE).
