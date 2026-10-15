@@ -8,9 +8,9 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyTitle("METASONIC-WEBSERVICE_DEMO")]
 [assembly: AssemblyDescription("")]
 [assembly: AssemblyConfiguration("")]
-[assembly: AssemblyCompany("")]
+[assembly: AssemblyCompany("Comstruct")]
 [assembly: AssemblyProduct("METASONIC-WEBSERVICE_DEMO")]
-[assembly: AssemblyCopyright("Copyright ©  2024")]
+[assembly: AssemblyCopyright("Copyright © 2026 Comstruct")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 
@@ -20,7 +20,7 @@ using System.Runtime.InteropServices;
 [assembly: ComVisible(false)]
 
 // Die folgende GUID bestimmt die ID der Typbibliothek, wenn dieses Projekt für COM verfügbar gemacht wird
-[assembly: Guid("4e8e7c31-89bb-4b2d-9cfc-4df04e0392b2")]
+[assembly: Guid("5e8e7c31-89bb-4b2d-9cfc-4df04e0392b3")]
 
 // Versionsinformationen für eine Assembly bestehen aus den folgenden vier Werten:
 //

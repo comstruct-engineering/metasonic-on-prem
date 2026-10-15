@@ -56,7 +56,6 @@ namespace MetasonicDocumentUploadPoC
             var response = _http.GetAsync(url).GetAwaiter().GetResult();
             response.EnsureSuccessStatusCode();
             var body = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
-            Console.WriteLine($"[DEBUG] GET {url} -> HTTP {(int)response.StatusCode}, body length={body.Length}, preview={body.Substring(0, Math.Min(200, body.Length))}");
             return ParseInvoiceRows(body);
         }
 

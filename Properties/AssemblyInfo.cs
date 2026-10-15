@@ -5,13 +5,13 @@ using System.Runtime.InteropServices;
 // Allgemeine Informationen über eine Assembly werden über die folgenden
 // Attribute gesteuert. Ändern Sie diese Attributwerte, um die Informationen zu ändern,
 // die einer Assembly zugeordnet sind.
-[assembly: AssemblyTitle("REIF Metasonic Formular")]
-[assembly: AssemblyDescription("")]
+[assembly: AssemblyTitle("Metasonic Formular")]
+[assembly: AssemblyDescription("Windows Forms client for Metasonic DMS qualifier verification")]
 [assembly: AssemblyConfiguration("")]
-[assembly: AssemblyCompany("REIF Bauunternehmung GmbH & Co. KG")]
-[assembly: AssemblyProduct("REIF Metasonic Formular")]
-[assembly: AssemblyCopyright("Copyright ©  2025")]
-[assembly: AssemblyTrademark("REIF")]
+[assembly: AssemblyCompany("Comstruct")]
+[assembly: AssemblyProduct("Metasonic Formular")]
+[assembly: AssemblyCopyright("Copyright © 2026 Comstruct")]
+[assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 
 // Durch Festlegen von ComVisible auf FALSE werden die Typen in dieser Assembly

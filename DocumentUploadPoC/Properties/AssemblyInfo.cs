@@ -8,9 +8,9 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyTitle("Metasonic Document Upload PoC")]
 [assembly: AssemblyDescription("Proof of Concept for document upload to Metasonic DMS via WCF")]
 [assembly: AssemblyConfiguration("")]
-[assembly: AssemblyCompany("BRZ")]
+[assembly: AssemblyCompany("Comstruct")]
 [assembly: AssemblyProduct("MetasonicDocumentUploadPoC")]
-[assembly: AssemblyCopyright("Copyright © 2026")]
+[assembly: AssemblyCopyright("Copyright © 2026 Comstruct")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 

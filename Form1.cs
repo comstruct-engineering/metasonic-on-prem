@@ -27,7 +27,7 @@ namespace DmsFormular1
 		String QualifierIsSplit = "234"??;*/
 
 
-		// BRZ365 Testumgebung Metasonic 10.0.0.5
+		// BRZ365 Testumgebung Metasonic
 		String QualifierKreditorText = "89900207";
 		String QualifierSachlich = "223";
 		String QualifierBelegNr = "89900202";
@@ -527,19 +527,20 @@ namespace DmsFormular1
 
 		private void buttonBelegFinance_Click(object sender, EventArgs e)
 		{
-			// Default Browser öffnen und Finance URL aufrufen
-			//OpenUrlInDefaultBrowser("https://google.de");
-			
-			//string Belegnummer = document.FieldList["89900202"].Value.ToString();
-			string Belegnummer = textBoxBelegnummer.Text;
-			OpenUrlInDefaultBrowser($"https://finance-s002.brz365.eu/syracuse-main/html/main.html?url=/trans/x3/erp/L240604/$sessions?f=GESBIS/2//M/ + {Belegnummer}");
-
+			string belegnummer = textBoxBelegnummer.Text;
+			string baseUrl = Environment.GetEnvironmentVariable("BRZ_FINANCE_URL_TEMPLATE")
+				?? "https://finance.example.com/syracuse-main/html/main.html?url=/trans/x3/erp/ENV/$sessions?f=GESBIS/2//M/{belegnummer}";
+			string url = baseUrl.Contains("{belegnummer}")
+				? baseUrl.Replace("{belegnummer}", Uri.EscapeDataString(belegnummer))
+				: $"{baseUrl}{Uri.EscapeDataString(belegnummer)}";
+			OpenUrlInDefaultBrowser(url);
 		}
 
 		private void labelSplit_Click(object sender, EventArgs e)
 		{
-			//OpenUrlInDefaultBrowser("https://google.de");
-			OpenUrlInDefaultBrowser("https://qwiki.reif-bau.de/content/56262aa3-22a2-4ac3-8406-cb97911f74a2?query=brz365&title=sammelseite-fr-brz365-prozesse");
+			string wikiUrl = Environment.GetEnvironmentVariable("SPLIT_INVOICE_HELP_URL")
+				?? "https://knowledge.comstruct.com";
+			OpenUrlInDefaultBrowser(wikiUrl);
 		}
 	}
     

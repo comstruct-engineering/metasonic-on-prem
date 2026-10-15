@@ -288,7 +288,7 @@ msbuild MetasonicCLI.csproj /p:Configuration=Release
 
 ## License
 
-Internal BRZ tool - not for external distribution.
+Released under the [MIT License](../LICENSE).
 
 ---
 

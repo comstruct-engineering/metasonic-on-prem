@@ -33,7 +33,7 @@ namespace DmsFormular1
 					switch (ProgramMode)
 					{
 						case "BRZ365test":
-							Application.Run(new Form1("297")); // BRZ365 Testumgebung 10.0.0.5
+							Application.Run(new Form1("297")); // BRZ365 Testumgebung
 							break;
 
 						case "BRZ365live":
@@ -46,17 +46,9 @@ namespace DmsFormular1
 
 						default:
 							MessageBox.Show($"Ungültiger Modus: {ProgramMode}. Nutze BRZ365test.", "Fehler", MessageBoxButtons.OK, MessageBoxIcon.Error);
-							Application.Run(new Form1("297")); // BRZ365 Testumgebung 10.0.0.5
+							Application.Run(new Form1("297")); // BRZ365 Testumgebung
 							break;
 					}
-
-
-					// Todo Übergabe wieder aktivieren
-					// Todo SecKey hinzufügen / Programmabbruch ohne 
-					//MessageBox.Show("Keine DOCID übergeben.");
-					//Application.Run(new Form1("297")); // BRZ365 Testumgebung 10.0.0.5
-					//Application.Run(new Form1("1466254")); // BRZ365
-					//Application.Run(new Form1("101")); //BRZ7
 
 			    }
 

@@ -4,7 +4,7 @@
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
-    <ProjectGuid>{C9E2F8A1-4D5B-6E3C-7A8F-1B2D3E4F5G6H}</ProjectGuid>
+    <ProjectGuid>{C9E2F8A1-4D5B-6E3C-7A8F-1B2D3E4F5A6B}</ProjectGuid>
     <OutputType>Exe</OutputType>
     <RootNamespace>MetasonicCLI</RootNamespace>
     <AssemblyName>MetasonicCLI</AssemblyName>

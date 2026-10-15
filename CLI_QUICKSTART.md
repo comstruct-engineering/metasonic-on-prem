@@ -322,7 +322,7 @@ MetasonicCLI update 1527018 sachlich richtig --pass $password
 
 - **Documentation**: See `MetasonicCLI/README.md`
 - **Help**: `MetasonicCLI --help`
-- **Issues**: Report to BRZ IT department
+- **Issues**: Open an issue in this repository or contact Comstruct support
 
 ---
 

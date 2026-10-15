@@ -4,7 +4,7 @@
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
-    <ProjectGuid>{4E8E7C31-89BB-4B2D-9CFC-4DF04E0392B2}</ProjectGuid>
+    <ProjectGuid>{5E8E7C31-89BB-4B2D-9CFC-4DF04E0392B3}</ProjectGuid>
     <OutputType>WinExe</OutputType>
     <RootNamespace>METASONIC_WEBSERVICE_DEMO</RootNamespace>
     <AssemblyName>METASONIC-WEBSERVICE_DEMO</AssemblyName>

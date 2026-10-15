@@ -1,6 +1,6 @@
 # Option B: real `comstruct-nest` + seeded demo data
 
-This is the closest-to-production way to test HTTP calls from the MetaSonic tooling **without** Reif’s DMS network: run the Comstruct stack locally and use the same invoice API the integration will use later.
+This is the closest-to-production way to test HTTP calls from the MetaSonic tooling **without** a live DMS network: run the Comstruct stack locally and use the same invoice API the integration uses in production.
 
 ## 1. Comstruct monorepo (`comstruct-one`)
 
@@ -38,9 +38,9 @@ This calls `GET /v1/invoices?limit=3&status=CHECKED` (Nest global prefix `v1`) a
 
 `GET /v1/invoices/:id/pdf` needs an invoice with a **linked document** in storage. The numeric demo rows may not all have files; if PDF returns 404, create/link a test document via the app or ask backend for a seed extension. Listing invoices still validates Option B for the read path.
 
-## 5. MetaSonic (Reif) side
+## 5. MetaSonic DMS side
 
-Unchanged: without VPN to Scanview, the CLI DMS commands do not connect. Option B covers **Comstruct API** parity only.
+Unchanged: without network/VPN access to Scanview, the CLI DMS commands do not connect to a live server (use `npm run metasonic:mock` for local SOAP testing). Option B covers **Comstruct API** parity only.
 
 ## 6. Troubleshooting: Nest logs `GraphQL Error (Code: 404)` / HTTP 500 on `/v1/invoices`
 

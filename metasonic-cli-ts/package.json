@@ -27,8 +27,8 @@
     "soap",
     "wcf"
   ],
-  "author": "BRZ",
-  "license": "UNLICENSED",
+  "author": "Comstruct",
+  "license": "MIT",
   "dependencies": {
     "commander": "^11.1.0",
     "soap": "^1.0.0",

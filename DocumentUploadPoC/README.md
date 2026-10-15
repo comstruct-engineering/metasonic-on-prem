@@ -91,7 +91,7 @@ See `config.env.example` for a full commented template.
 
 ## PDF Filename
 
-The uploaded PDF takes the name of the first existing file in the MetaSonic document and appends `_checked_by_comstruct`:
+The uploaded PDF takes the name of the first existing file in the MetaSonic document and appends `_geprueft_von_comstruct`:
 
 ```
 abc.pdf  →  abc_geprueft_von_comstruct.pdf

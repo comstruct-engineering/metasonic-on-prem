@@ -273,10 +273,10 @@ External System → REST API → IP Whitelist → SaveDocument → DMS
 
 ## Security Considerations
 
-### Current PoC (Not Production-Ready)
-- ⚠️ Credentials hardcoded in source code
-- ⚠️ No input validation
-- ⚠️ No audit logging
+### Current PoC (Local / Development Scope)
+- ✅ Credentials supplied via environment variables (`METASONIC_*`, `COMSTRUCT_*`)
+- ⚠️ Minimal input validation
+- ⚠️ Console logging only (no centralized audit log)
 - ⚠️ No IP restrictions
 - ⚠️ No rate limiting
 
