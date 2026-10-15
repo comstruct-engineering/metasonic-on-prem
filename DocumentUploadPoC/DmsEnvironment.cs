@@ -2,7 +2,7 @@ using System;
 
 namespace MetasonicDocumentUploadPoC
 {
-    /// <summary>Environment variables — align with <c>metasonic-cli-ts</c> (DMS worker).</summary>
+    /// <summary>Environment variables for the Comstruct ↔ MetaSonic DMS upload worker.</summary>
     internal static class DmsEnvironment
     {
         public static string ComstructBaseUrl() =>

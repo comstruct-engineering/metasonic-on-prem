@@ -3,7 +3,7 @@ using DmsFormular1.ScanviewWebservice;
 
 namespace MetasonicDocumentUploadPoC
 {
-    /// <summary>Parity with TypeScript <c>MetasonicClient.searchDocuments</c> / <c>findExistingDocumentByCorrelationValue</c>.</summary>
+    /// <summary>Helper methods for searching documents in MetaSonic Scanview by qualifier values.</summary>
     internal static class MetasonicSearchHelper
     {
         public static ResponseDocument[] SearchByFields(

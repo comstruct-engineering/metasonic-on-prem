@@ -9,7 +9,7 @@ using System.Web.Script.Serialization;
 
 namespace MetasonicDocumentUploadPoC
 {
-    /// <summary>HTTP client for Comstruct Nest — parity with <c>comstruct-dms-client.ts</c>.</summary>
+    /// <summary>HTTP client for the Comstruct REST API.</summary>
     internal sealed class ComstructApiClient : IDisposable
     {
         private readonly HttpClient _http;

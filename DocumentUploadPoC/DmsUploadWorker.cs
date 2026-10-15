@@ -9,7 +9,7 @@ using DmsFormular1.ScanviewWebservice;
 
 namespace MetasonicDocumentUploadPoC
 {
-    /// <summary>Comstruct → MetaSonic batch — parity with <c>dms-upload-worker.ts</c>: download PDF first (skip row if missing), then <c>AddItem</c> when Search finds a document.</summary>
+    /// <summary>Comstruct → MetaSonic batch worker: downloads verified invoice PDFs from Comstruct, appends them via <c>AddItem</c>, updates qualifiers, and reports sync status back to Comstruct.</summary>
     internal static class DmsUploadWorker
     {
         private static readonly JavaScriptSerializer Json = new JavaScriptSerializer();

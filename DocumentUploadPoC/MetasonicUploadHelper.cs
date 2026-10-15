@@ -5,7 +5,7 @@ using DmsFormular1.ScanviewWebservice;
 
 namespace MetasonicDocumentUploadPoC
 {
-    /// <summary>Shared <c>SaveDocument</c> upload — parity with TypeScript upload path (ItemData as byte[] is correct in WCF).</summary>
+    /// <summary>Helper methods for creating/updating MetaSonic documents and appending file attachments via WCF.</summary>
     internal static class MetasonicUploadHelper
     {
         private const string QualKreditor = "89900207";
