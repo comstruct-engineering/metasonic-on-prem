@@ -78,6 +78,19 @@ namespace MetasonicDocumentUploadPoC
                     return MetasonicInspectHelper.InspectDocumentAndAccounting(docId);
                 }
 
+                if (mode == "dms-list" || mode == "dms-elements")
+                {
+                    var dcId = args.Length > 1 ? args[1] : "89035003";
+                    var csvOut = args.Length > 2 ? args[2] : null;
+                    return MetasonicInspectHelper.ListDocClassElements(dcId, csvOut, syncToComstruct: false);
+                }
+
+                if (mode == "dms-sync-projects" || mode == "dms-sync-kst")
+                {
+                    var dcId = args.Length > 1 ? args[1] : "89035003";
+                    return MetasonicInspectHelper.ListDocClassElements(dcId, null, syncToComstruct: true);
+                }
+
                 if (mode == "odata" || mode == "odata-query")
                 {
                     var resource = args.Length > 1 ? args[1] : "Kostenstellen";

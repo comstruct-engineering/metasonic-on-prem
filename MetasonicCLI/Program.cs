@@ -95,6 +95,18 @@ namespace MetasonicCLI
                     case "inspect-doc":
                     case "accounting":
                         return MetasonicInspectHelper.InspectDocumentAndAccounting(args.Length > 1 ? args[1] : null);
+                    case "dms-list":
+                    case "dms-elements":
+                        return MetasonicInspectHelper.ListDocClassElements(
+                            args.Length > 1 ? args[1] : "89035003",
+                            args.Length > 2 ? args[2] : null,
+                            syncToComstruct: false);
+                    case "dms-sync-projects":
+                    case "dms-sync-kst":
+                        return MetasonicInspectHelper.ListDocClassElements(
+                            args.Length > 1 ? args[1] : "89035003",
+                            null,
+                            syncToComstruct: true);
                     case "odata":
                     case "odata-query":
                         return BrzOdataClient.QueryEndpoint(

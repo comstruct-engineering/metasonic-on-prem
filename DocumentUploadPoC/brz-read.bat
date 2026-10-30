@@ -27,6 +27,16 @@ if /I "%SUBCMD%"=="dms-inspect" (
     exit /b %ERRORLEVEL%
 )
 
+if /I "%SUBCMD%"=="dms-list" (
+    call run.bat dms-list "%~2" "%~3"
+    exit /b %ERRORLEVEL%
+)
+
+if /I "%SUBCMD%"=="dms-sync-projects" (
+    call run.bat dms-sync-projects "%~2"
+    exit /b %ERRORLEVEL%
+)
+
 if exist "bin\Debug\MetasonicDocumentUploadPoC.exe" (
     if /I "%SUBCMD%"=="test" (
         call run.bat db-test

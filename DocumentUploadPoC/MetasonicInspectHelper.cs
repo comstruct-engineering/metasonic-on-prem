@@ -565,5 +565,231 @@ namespace MetasonicDocumentUploadPoC
 
             return map;
         }
+
+        /// <summary>
+        /// Lists all documents/elements in a specific MetaSonic DocClass (e.g. 89035003 Kostenstellen),
+        /// displays their fields/qualifiers, and optionally exports them to a CSV file or syncs them to Comstruct.
+        /// </summary>
+        public static int ListDocClassElements(string docClassId, string csvOutputPath = null, bool syncToComstruct = false)
+        {
+            Console.WriteLine("=== MetaSonic DocClass Elements Listing (DocClass=" + docClassId + ") ===\n");
+            if (string.IsNullOrWhiteSpace(docClassId))
+            {
+                Console.WriteLine("ERROR: DocClassID is required (e.g. 89035003).");
+                return 1;
+            }
+
+            try
+            {
+                var client = CreateClient();
+                var loginData = Authenticate(client);
+                Console.WriteLine("Connected to " + DmsEnvironment.MetasonicEndpoint() + " (DB: " + DmsEnvironment.MetasonicDatabase() + ")\n");
+
+                PrintSingleDocClassDetails(client, ref loginData, docClassId.Trim());
+
+                var fieldNames = LoadFieldNamesForDocClass(client, ref loginData, docClassId.Trim());
+
+                var ops = new RequestSearchOperators
+                {
+                    MaxResults = 5000,
+                    OrSearch = true,
+                    NoLikeSearch = false,
+                    RecursiveDocClassSearch = true
+                };
+
+                var docs = client.Search(
+                    ref loginData,
+                    docClassId.Trim(),
+                    string.Empty,
+                    string.Empty,
+                    new RequestField[0],
+                    ops,
+                    loadItemList: false,
+                    smallDocument: false,
+                    smallFieldList: false) ?? new ResponseDocument[0];
+
+                if (docs.Length == 0 && fieldNames.Count > 0)
+                {
+                    var firstFieldId = fieldNames.Keys.First();
+                    docs = client.Search(
+                        ref loginData,
+                        docClassId.Trim(),
+                        string.Empty,
+                        string.Empty,
+                        new[] { new RequestField { ID = firstFieldId, Value = "*" } },
+                        ops,
+                        loadItemList: false,
+                        smallDocument: false,
+                        smallFieldList: false) ?? new ResponseDocument[0];
+                }
+
+                Console.WriteLine("Found " + docs.Length + " element(s) in DocClass " + docClassId + ":\n");
+                if (docs.Length == 0)
+                {
+                    return 0;
+                }
+
+                var allFieldIds = new List<string>(fieldNames.Keys);
+                foreach (var d in docs)
+                {
+                    if (d.FieldList == null) continue;
+                    foreach (var f in d.FieldList)
+                    {
+                        if (!string.IsNullOrEmpty(f.ID) && !allFieldIds.Contains(f.ID))
+                        {
+                            allFieldIds.Add(f.ID);
+                        }
+                    }
+                }
+
+                var headerLabels = new List<string> { "DocID" };
+                foreach (var fid in allFieldIds)
+                {
+                    string fn;
+                    fieldNames.TryGetValue(fid, out fn);
+                    headerLabels.Add(string.IsNullOrEmpty(fn) ? fid : (fid + ":" + fn));
+                }
+
+                Console.WriteLine(string.Join(" | ", headerLabels));
+                Console.WriteLine(new string('-', 100));
+
+                int maxPreview = Math.Min(100, docs.Length);
+                for (int i = 0; i < maxPreview; i++)
+                {
+                    var d = docs[i];
+                    var rowVals = new List<string> { d.ID ?? "" };
+                    foreach (var fid in allFieldIds)
+                    {
+                        string val = "";
+                        if (d.FieldList != null)
+                        {
+                            var match = d.FieldList.FirstOrDefault(x => x.ID == fid);
+                            if (match != null && match.Value != null) val = match.Value;
+                        }
+                        rowVals.Add(val);
+                    }
+                    Console.WriteLine(string.Join(" | ", rowVals));
+                }
+
+                if (docs.Length > maxPreview)
+                {
+                    Console.WriteLine("... (" + (docs.Length - maxPreview) + " more element(s) omitted from console preview)");
+                }
+
+                if (!string.IsNullOrWhiteSpace(csvOutputPath))
+                {
+                    var fullPath = System.IO.Path.GetFullPath(csvOutputPath);
+                    var dir = System.IO.Path.GetDirectoryName(fullPath);
+                    if (!string.IsNullOrEmpty(dir)) System.IO.Directory.CreateDirectory(dir);
+
+                    using (var sw = new System.IO.StreamWriter(fullPath, false, new System.Text.UTF8Encoding(false)))
+                    {
+                        sw.WriteLine(string.Join(";", headerLabels.ConvertAll(EscapeCsv)));
+                        foreach (var d in docs)
+                        {
+                            var rowVals = new List<string> { EscapeCsv(d.ID ?? "") };
+                            foreach (var fid in allFieldIds)
+                            {
+                                string val = "";
+                                if (d.FieldList != null)
+                                {
+                                    var match = d.FieldList.FirstOrDefault(x => x.ID == fid);
+                                    if (match != null && match.Value != null) val = match.Value;
+                                }
+                                rowVals.Add(EscapeCsv(val));
+                            }
+                            sw.WriteLine(string.Join(";", rowVals));
+                        }
+                    }
+                    Console.WriteLine("\nExported " + docs.Length + " element(s) to CSV: " + fullPath);
+                }
+
+                if (syncToComstruct)
+                {
+                    var dry = DmsEnvironment.DmsWorkerDryRun();
+                    Console.WriteLine("\nSyncing " + docs.Length + " element(s) from DocClass " + docClassId + " to Comstruct (dryRun=" + dry + ")...");
+                    using (var comstruct = new ComstructApiClient())
+                    {
+                        int synced = 0;
+                        foreach (var d in docs)
+                        {
+                            if (d.FieldList == null) continue;
+                            string kstNr = null;
+                            string bez = null;
+                            string betrNr = null;
+
+                            foreach (var f in d.FieldList)
+                            {
+                                if (string.IsNullOrWhiteSpace(f.Value)) continue;
+                                string fn;
+                                fieldNames.TryGetValue(f.ID ?? "", out fn);
+                                var label = (fn ?? "").ToLowerInvariant();
+                                var val = f.Value.Trim();
+
+                                if (kstNr == null && (label.Contains("kostenstelle") || label.Contains("kst") || label.Contains("nummer") || label.Contains("nr") || label.Contains("code")))
+                                {
+                                    kstNr = val;
+                                }
+                                else if (bez == null && (label.Contains("bezeichnung") || label.Contains("name") || label.Contains("titel") || label.Contains("baustelle") || label.Contains("text")))
+                                {
+                                    bez = val;
+                                }
+                                else if (betrNr == null && (label.Contains("betrieb") || label.Contains("mandant") || label.Contains("firma")))
+                                {
+                                    betrNr = val;
+                                }
+                            }
+
+                            if (string.IsNullOrEmpty(kstNr))
+                            {
+                                var nonEmpty = d.FieldList.Where(x => !string.IsNullOrWhiteSpace(x.Value)).ToList();
+                                if (nonEmpty.Count > 0) kstNr = nonEmpty[0].Value.Trim();
+                                if (nonEmpty.Count > 1 && string.IsNullOrEmpty(bez)) bez = nonEmpty[1].Value.Trim();
+                            }
+
+                            if (string.IsNullOrEmpty(kstNr)) continue;
+                            if (string.IsNullOrEmpty(bez)) bez = kstNr;
+
+                            var proj = new Dictionary<string, object>();
+                            proj["external_id"] = kstNr;
+                            proj["project_number"] = kstNr;
+                            proj["title"] = bez;
+                            proj["active"] = true;
+                            if (!string.IsNullOrEmpty(betrNr)) proj["legal_entity_number"] = betrNr;
+
+                            if (dry)
+                            {
+                                Console.WriteLine("  [dry-run] project_number='" + kstNr + "', title='" + bez + "'" + (betrNr != null ? ", legal_entity='" + betrNr + "'" : ""));
+                            }
+                            else
+                            {
+                                comstruct.UpsertProject(proj);
+                            }
+                            synced++;
+                        }
+                        Console.WriteLine("Synced " + synced + " project(s) to Comstruct.");
+                    }
+                }
+
+                return 0;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Failed to list DocClass elements: " + ex.Message);
+                return 1;
+            }
+        }
+
+        private static string EscapeCsv(string value)
+        {
+            if (string.IsNullOrEmpty(value)) return string.Empty;
+            var cleaned = value.Replace("\r", " ").Replace("\n", " ").Trim();
+            if (cleaned.IndexOf(';') >= 0 || cleaned.IndexOf('"') >= 0)
+            {
+                return "\"" + cleaned.Replace("\"", "\"\"") + "\"";
+            }
+
+            return cleaned;
+        }
     }
 }
