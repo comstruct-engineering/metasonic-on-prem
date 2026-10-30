@@ -88,13 +88,9 @@ namespace MetasonicDocumentUploadPoC
 
         /// <summary>
         /// Downloads the invoice file from Comstruct.
-        /// Returns (bytes, originalFileName) or null when the file is not yet available.
-        /// When annotations=true the endpoint returns JSON { pdf_base64, file_name, ... };
-        /// we decode pdf_base64 and use file_name so the correct type (PDF/TIFF/etc.) is preserved.
-        /// Without annotations the endpoint returns raw bytes; filename is derived from Content-Disposition.
-        /// When overlay=true, match-status boxes are embedded in the returned PDF (can be combined with annotations).
+        /// Returns Tuple(bytes, originalFileName) or null when the file is not yet available.
         /// </summary>
-        public (byte[] Data, string FileName)? DownloadInvoicePdf(string invoiceId)
+        public Tuple<byte[], string> DownloadInvoicePdf(string invoiceId)
         {
             var baseUrl = DmsEnvironment.ComstructBaseUrl();
             var queryParts = new List<string>();
@@ -122,7 +118,9 @@ namespace MetasonicDocumentUploadPoC
 
             response.EnsureSuccessStatusCode();
 
-            var contentType = response.Content.Headers.ContentType?.MediaType ?? string.Empty;
+            var contentType = (response.Content.Headers.ContentType != null && response.Content.Headers.ContentType.MediaType != null)
+                ? response.Content.Headers.ContentType.MediaType
+                : string.Empty;
             if (contentType.IndexOf("json", StringComparison.OrdinalIgnoreCase) >= 0)
             {
                 var jsonText = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
@@ -132,7 +130,8 @@ namespace MetasonicDocumentUploadPoC
                     return null;
                 }
 
-                var b64 = Convert.ToString(obj["pdf_base64"])?.Replace("\r", "").Replace("\n", "").Replace(" ", "");
+                var rawB64 = Convert.ToString(obj["pdf_base64"]);
+                var b64 = rawB64 != null ? rawB64.Replace("\r", "").Replace("\n", "").Replace(" ", "") : null;
                 if (string.IsNullOrEmpty(b64)) return null;
                 var data = Convert.FromBase64String(b64);
 
@@ -140,17 +139,21 @@ namespace MetasonicDocumentUploadPoC
                     ? Convert.ToString(obj["file_name"])
                     : "invoice-" + invoiceId + ".pdf";
 
-                return (data, fileName);
+                return Tuple.Create(data, fileName);
             }
 
             var bytes = response.Content.ReadAsByteArrayAsync().GetAwaiter().GetResult();
             if (bytes == null || bytes.Length == 0) return null;
 
-            var disposition = response.Content.Headers.ContentDisposition?.FileNameStar
-                ?? response.Content.Headers.ContentDisposition?.FileName
-                ?? ("invoice-" + invoiceId + ".pdf");
+            string disposition = "invoice-" + invoiceId + ".pdf";
+            if (response.Content.Headers.ContentDisposition != null)
+            {
+                disposition = response.Content.Headers.ContentDisposition.FileNameStar
+                    ?? response.Content.Headers.ContentDisposition.FileName
+                    ?? disposition;
+            }
 
-            return (bytes, disposition.Trim('"'));
+            return Tuple.Create(bytes, disposition.Trim('"'));
         }
 
         public void PostInvoiceCallback(string externalId, bool success, string errorMessage = null)
@@ -158,11 +161,9 @@ namespace MetasonicDocumentUploadPoC
             var basePath = InvoicesBasePath();
             var url = DmsEnvironment.ComstructBaseUrl() + basePath + "/callback";
 
-            var o = new Dictionary<string, object>
-            {
-                ["external_id"] = externalId,
-                ["success"] = success
-            };
+            var o = new Dictionary<string, object>();
+            o["external_id"] = externalId;
+            o["success"] = success;
             if (!string.IsNullOrEmpty(errorMessage))
             {
                 o["messages"] = new[] { errorMessage };
@@ -178,7 +179,7 @@ namespace MetasonicDocumentUploadPoC
             if (!response.IsSuccessStatusCode)
             {
                 var err = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
-                throw new InvalidOperationException($"POST callback failed HTTP {(int)response.StatusCode}: {err}");
+                throw new InvalidOperationException("POST callback failed HTTP " + (int)response.StatusCode + ": " + err);
             }
         }
 
@@ -205,13 +206,73 @@ namespace MetasonicDocumentUploadPoC
             if (!response.IsSuccessStatusCode)
             {
                 var err = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
-                throw new InvalidOperationException($"PATCH DMS failed HTTP {(int)response.StatusCode}: {err}");
+                throw new InvalidOperationException("PATCH DMS failed HTTP " + (int)response.StatusCode + ": " + err);
             }
+        }
+
+        private static string ApiPath(string endpoint)
+        {
+            var p = DmsEnvironment.ComstructApiPrefix();
+            var clean = endpoint.TrimStart('/');
+            return string.IsNullOrEmpty(p) ? "/" + clean : "/" + p + "/" + clean;
+        }
+
+        private string PostJson(string endpoint, object payload)
+        {
+            var url = DmsEnvironment.ComstructBaseUrl() + ApiPath(endpoint);
+            var jsonBody = _json.Serialize(payload);
+            var request = new HttpRequestMessage(HttpMethod.Post, url)
+            {
+                Content = new StringContent(jsonBody, Encoding.UTF8, "application/json")
+            };
+            request.Headers.Add("Accept", "application/json");
+
+            var response = _http.SendAsync(request).GetAwaiter().GetResult();
+            var body = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new InvalidOperationException("POST " + endpoint + " failed HTTP " + (int)response.StatusCode + ": " + body);
+            }
+
+            return body;
+        }
+
+        public void UpsertSuppliers(List<Dictionary<string, object>> suppliers)
+        {
+            if (suppliers == null || suppliers.Count == 0) return;
+            PostJson("suppliers", suppliers);
+        }
+
+        public void UpsertProject(Dictionary<string, object> project)
+        {
+            if (project == null || project.Count == 0) return;
+            PostJson("projects", project);
+        }
+
+        public void UpsertAccounts(List<Dictionary<string, object>> accounts)
+        {
+            if (accounts == null || accounts.Count == 0) return;
+            PostJson("accounts", accounts);
+        }
+
+        public void UpsertTaxCodes(List<Dictionary<string, object>> taxCodes)
+        {
+            if (taxCodes == null || taxCodes.Count == 0) return;
+            PostJson("tax-codes", taxCodes);
+        }
+
+        public void UpsertPaymentTerms(List<Dictionary<string, object>> paymentTerms)
+        {
+            if (paymentTerms == null || paymentTerms.Count == 0) return;
+            PostJson("payment-terms", paymentTerms);
         }
 
         public void Dispose()
         {
-            _http?.Dispose();
+            if (_http != null)
+            {
+                _http.Dispose();
+            }
         }
     }
 }

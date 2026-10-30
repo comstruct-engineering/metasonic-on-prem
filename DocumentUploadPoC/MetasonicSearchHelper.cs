@@ -17,7 +17,7 @@ namespace MetasonicDocumentUploadPoC
         {
             if (searchFields == null || searchFields.Length == 0)
             {
-                return Array.Empty<ResponseDocument>();
+                return new ResponseDocument[0];
             }
 
             var ops = new RequestSearchOperators
@@ -37,7 +37,7 @@ namespace MetasonicDocumentUploadPoC
                 loadItemList: false,
                 smallDocument: true,
                 smallFieldList: true
-            ) ?? Array.Empty<ResponseDocument>();
+            ) ?? new ResponseDocument[0];
         }
 
         public static ResponseDocument FindExistingByCorrelationValue(
@@ -69,7 +69,7 @@ namespace MetasonicDocumentUploadPoC
             if (hits.Length > 1)
             {
                 Console.WriteLine(
-                    $"Warning: Metasonic Search returned {hits.Length} documents for correlation value; using the first."
+                    "Warning: Metasonic Search returned " + hits.Length + " documents for correlation value; using the first."
                 );
             }
 

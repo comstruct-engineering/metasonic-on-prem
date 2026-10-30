@@ -9,6 +9,7 @@ Kommandozeilen-Werkzeug (CLI) zum Abfragen, Suchen und Aktualisieren von MetaSon
 - **Sprechende Feldnamen** – z. B. `sachlich` oder `preislich` statt numerischer IDs (`223`, `222`)
 - **Dokumentensuche (`search`)** – Dokumente anhand eines Korrelationsfelds (z. B. `external_id`) suchen
 - **Synchronisations-Worker (`worker`)** – Den Comstruct → MetaSonic DMS-Abgleich direkt ausführen
+- **BRZ-Stammdaten-Worker (`masterdata` / `db-test`)** – Lesende BRZ-Datenbankverbindung testen und Stammdaten (Kreditoren, Kostenstellen, Sachkonten, Steuercodes, Zahlungsbedingungen) nach Comstruct synchronisieren
 
 ## Kompilierung
 
@@ -85,6 +86,12 @@ MetasonicCLI worker
 | `list <docid>` | Alias für `get` | `MetasonicCLI list 1527018` |
 | `search <correlationValue>` | Dokument anhand des Korrelationsfelds suchen | `MetasonicCLI search EXT-2026-001` |
 | `worker` | Comstruct → MetaSonic DMS-Synchronisation ausführen | `MetasonicCLI worker` |
+| `masterdata` | BRZ-Datenbank → Comstruct Stammdaten-Synchronisation ausführen | `MetasonicCLI masterdata` |
+| `db-test` | Lesende BRZ-Datenbankverbindung testen (`SELECT 1`) | `MetasonicCLI db-test` |
+| `db-tables [filter]` | Tabellen und Views der BRZ-Datenbank auflisten | `MetasonicCLI db-tables Kred` |
+| `db-query "<sql>" [csv]` | Lese-Abfrage auf der BRZ-Datenbank ausführen (optional als CSV speichern) | `MetasonicCLI db-query "SELECT TOP 10 * FROM Kreditoren" out.csv` |
+| `dms-classes [docClassId]` | MetaSonic-Dokumentenklassen, Qualifizierer-IDs/Namen, Pflichtfelder, SQL-Lookups & Kontierungs-Klassen anzeigen | `MetasonicCLI dms-classes` |
+| `dms-inspect [docId]` | MetaSonic-Dokument inkl. Feldnamen, Dateien und Kontierungstabelle (`GetAccountingTable`) untersuchen | `MetasonicCLI dms-inspect 1527018` |
 | `--help` | Hilfe anzeigen | `MetasonicCLI --help` |
 
 ## Unterstützte Qualifizierer-Kurzbezeichnungen

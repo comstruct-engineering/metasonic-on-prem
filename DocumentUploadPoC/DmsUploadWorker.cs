@@ -20,7 +20,10 @@ namespace MetasonicDocumentUploadPoC
             Console.WriteLine("=== DMS upload worker (.NET) — Comstruct → MetaSonic ===\n");
             var qs = DmsEnvironment.QueueStatus();
             Console.WriteLine(
-                $"Comstruct base={DmsEnvironment.ComstructBaseUrl()}{(string.IsNullOrEmpty(qs) ? "" : " statusFilter=" + qs)} metasonicCorrelationKey={DmsEnvironment.MetasonicDmsCorrelationKey()} dryRun={dry}\n"
+                "Comstruct base=" + DmsEnvironment.ComstructBaseUrl() +
+                (string.IsNullOrEmpty(qs) ? "" : " statusFilter=" + qs) +
+                " metasonicCorrelationKey=" + DmsEnvironment.MetasonicDmsCorrelationKey() +
+                " dryRun=" + dry + "\n"
             );
 
             var statePath = DmsEnvironment.DmsStateFile();
@@ -53,16 +56,16 @@ namespace MetasonicDocumentUploadPoC
 
             using (var comstruct = new ComstructApiClient())
             {
-                Console.WriteLine($"[1/5] Connecting to Comstruct ({DmsEnvironment.ComstructBaseUrl()})...");
+                Console.WriteLine("[1/5] Connecting to Comstruct (" + DmsEnvironment.ComstructBaseUrl() + ")...");
                 var fromApi = comstruct.ListInvoiceRowsForQueue();
-                Console.WriteLine($"[1/5] Connected to Comstruct. Fetched {fromApi.Count} invoice(s).");
+                Console.WriteLine("[1/5] Connected to Comstruct. Fetched " + fromApi.Count + " invoice(s).");
                 var fromApiCount = fromApi.Count;
                 var rows = SkipFinishedRows(fromApi);
                 var afterSkip = rows.Count;
                 rows = SortByCursor(rows);
 
                 Console.WriteLine(
-                    $"DMS worker: fromApi={fromApiCount} afterSkip={afterSkip} (processing {rows.Count})"
+                    "DMS worker: fromApi=" + fromApiCount + " afterSkip=" + afterSkip + " (processing " + rows.Count + ")"
                 );
 
                 if (rows.Count == 0)
@@ -76,7 +79,7 @@ namespace MetasonicDocumentUploadPoC
                     foreach (var r in rows)
                     {
                         var id = GetStr(r, "id");
-                        Console.WriteLine($"[dry-run] would process invoice {id}");
+                        Console.WriteLine("[dry-run] would process invoice " + id);
                     }
 
                     return 0;
@@ -95,9 +98,10 @@ namespace MetasonicDocumentUploadPoC
                         MaxArrayLength = 2147483647,
                         MaxBytesPerRead = 2147483647,
                         MaxNameTableCharCount = 16384
-                    },
-                    Security = { Mode = System.ServiceModel.BasicHttpSecurityMode.None }
+                    }
                 };
+                binding.Security.Mode = System.ServiceModel.BasicHttpSecurityMode.None;
+
                 var endpoint = new System.ServiceModel.EndpointAddress(DmsEnvironment.MetasonicEndpoint());
                 var client = new ScanviewWebserviceClient(binding, endpoint);
 
@@ -110,11 +114,11 @@ namespace MetasonicDocumentUploadPoC
                     Password = DmsEnvironment.MetasonicPassword(),
                     LoginDatabaseName = DmsEnvironment.MetasonicDatabase()
                 };
-                Console.WriteLine($"\n[2/5] Connecting to MetaSonic ({DmsEnvironment.MetasonicEndpoint()})...");
+                Console.WriteLine("\n[2/5] Connecting to MetaSonic (" + DmsEnvironment.MetasonicEndpoint() + ")...");
                 client.Login(ref loginData);
-                Console.WriteLine($"[2/5] Connected to MetaSonic as '{DmsEnvironment.MetasonicUser()}'.");
+                Console.WriteLine("[2/5] Connected to MetaSonic as '" + DmsEnvironment.MetasonicUser() + "'.");
 
-                Console.WriteLine($"\n[3/5] Processing {rows.Count} invoice(s)...\n");
+                Console.WriteLine("\n[3/5] Processing " + rows.Count + " invoice(s)...\n");
                 var maxCursor = string.IsNullOrEmpty(initialWatermark) ? epochIso : initialWatermark;
                 foreach (var row in rows)
                 {
@@ -142,11 +146,11 @@ namespace MetasonicDocumentUploadPoC
                     }
 
                     File.WriteAllText(statePath, Json.Serialize(stateOut), Encoding.UTF8);
-                    Console.WriteLine($"DMS worker: state written {statePath} lastCheckedAt={maxCursor}");
+                    Console.WriteLine("DMS worker: state written " + statePath + " lastCheckedAt=" + maxCursor);
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Warning: could not write state file: {ex.Message}");
+                    Console.WriteLine("Warning: could not write state file: " + ex.Message);
                 }
             }
 
@@ -197,7 +201,6 @@ namespace MetasonicDocumentUploadPoC
                 .ToList();
         }
 
-        /// <summary>Skip rows where external_status is already SYNCED — FAILED rows are retried.</summary>
         private static List<Dictionary<string, object>> SkipFinishedRows(
             List<Dictionary<string, object>> rows)
         {
@@ -222,8 +225,10 @@ namespace MetasonicDocumentUploadPoC
                 return a;
             }
 
-            if (DateTime.TryParse(a, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var da) &&
-                DateTime.TryParse(b, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var db))
+            DateTime da;
+            DateTime db;
+            if (DateTime.TryParse(a, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out da) &&
+                DateTime.TryParse(b, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out db))
             {
                 return da >= db ? a : b;
             }
@@ -242,12 +247,6 @@ namespace MetasonicDocumentUploadPoC
             com.PatchInvoiceDms(invoiceId, Json.Serialize(o));
         }
 
-        /// <summary>
-        /// Derives the filename for the appended file.
-        /// Uses the first existing item's name as base, appends "_geprueft_von_comstruct",
-        /// and preserves the extension from the downloaded source file (e.g. .tif, .pdf).
-        /// Falls back to Comstruct_Rechnung_{invoice_number}.{ext} if no existing item is found.
-        /// </summary>
         private static string BuildPdfFileName(
             ScanviewWebserviceClient client,
             ref LoginData loginData,
@@ -258,24 +257,27 @@ namespace MetasonicDocumentUploadPoC
         {
             var sourceExt = string.IsNullOrEmpty(detectedExt) ? ".pdf" : detectedExt;
 
-            try
+            if (!string.IsNullOrWhiteSpace(docId))
             {
-                var items = client.GetItemList(ref loginData, docId, false, false);
-                if (items != null && items.Length > 0)
+                try
                 {
-                    var first = items[0];
-                    Console.WriteLine($"  [DEBUG] Existing item[0]: OriginalFileName='{first.OriginalFileName}', ItemName='{first.ItemName}'");
-                    var firstName = first.OriginalFileName;
-                    if (!string.IsNullOrWhiteSpace(firstName))
+                    var items = client.GetItemList(ref loginData, docId, false, false);
+                    if (items != null && items.Length > 0)
                     {
-                        var baseName = Path.GetFileNameWithoutExtension(firstName);
-                        return SanitizeFilePart(baseName) + "_geprueft_von_comstruct" + sourceExt;
+                        var first = items[0];
+                        Console.WriteLine("  [DEBUG] Existing item[0]: OriginalFileName='" + first.OriginalFileName + "', ItemName='" + first.ItemName + "'");
+                        var firstName = first.OriginalFileName;
+                        if (!string.IsNullOrWhiteSpace(firstName))
+                        {
+                            var baseName = Path.GetFileNameWithoutExtension(firstName);
+                            return SanitizeFilePart(baseName) + "_geprueft_von_comstruct" + sourceExt;
+                        }
                     }
                 }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"  Warning: could not read existing item names ({ex.Message}), using fallback filename.");
+                catch (Exception ex)
+                {
+                    Console.WriteLine("  Warning: could not read existing item names (" + ex.Message + "), using fallback filename.");
+                }
             }
 
             var number = SanitizeFilePart(GetStr(row, "invoice_number"));
@@ -286,8 +288,8 @@ namespace MetasonicDocumentUploadPoC
         private static string SanitizeFilePart(string value)
         {
             if (string.IsNullOrWhiteSpace(value)) return string.Empty;
-            var invalid = System.IO.Path.GetInvalidFileNameChars();
-            var sb = new System.Text.StringBuilder();
+            var invalid = Path.GetInvalidFileNameChars();
+            var sb = new StringBuilder();
             foreach (var c in value.Trim())
             {
                 switch (c)
@@ -307,7 +309,6 @@ namespace MetasonicDocumentUploadPoC
             return sb.ToString().Trim('_');
         }
 
-        /// <returns><c>false</c> when Comstruct has no PDF yet — no PATCH, cursor for this row is not advanced.</returns>
         private static bool ProcessOne(
             ComstructApiClient comstruct,
             ScanviewWebserviceClient client,
@@ -321,39 +322,91 @@ namespace MetasonicDocumentUploadPoC
                 return true;
             }
 
-            var metasonicDocId = GetStr(row, "external_id");
-            if (string.IsNullOrWhiteSpace(metasonicDocId))
+            var correlationValue = MetasonicCorrelationValue(row);
+            var correlationQualId = DmsEnvironment.MetasonicComstructQualifierId();
+            var allowCreate = DmsEnvironment.DmsWorkerAllowCreateIfNotFound();
+
+            if (string.IsNullOrWhiteSpace(correlationValue) && !allowCreate)
             {
-                Console.WriteLine($"--- Invoice {invoiceId}: no external_id set, skipping ---");
+                Console.WriteLine("--- Invoice " + invoiceId + ": no " + DmsEnvironment.MetasonicDmsCorrelationKey() + " set, skipping ---");
                 return true;
             }
 
-            Console.WriteLine($"--- Invoice {invoiceId} (MetaSonic doc {metasonicDocId}) ---");
+            Console.WriteLine("--- Invoice " + invoiceId + " (correlation=" + (correlationValue ?? invoiceId) + ") ---");
 
-            Console.WriteLine($"  [4/5] Downloading file from Comstruct...");
+            Console.WriteLine("  [4/5] Downloading file from Comstruct...");
             var download = comstruct.DownloadInvoicePdf(invoiceId);
-            if (download == null || download.Value.Data == null || download.Value.Data.Length == 0)
+            if (download == null || download.Item1 == null || download.Item1.Length == 0)
             {
-                Console.WriteLine($"  [4/5] No file available yet — skipping invoice {invoiceId}.");
+                Console.WriteLine("  [4/5] No file available yet — skipping invoice " + invoiceId + ".");
                 return false;
             }
-            var pdf = download.Value.Data;
+            var pdf = download.Item1;
             var detectedExt = MetasonicUploadHelper.DetectFileExtension(pdf);
-            Console.WriteLine($"  [4/5] File downloaded ({pdf.Length} bytes, detected type: {detectedExt}).");
-
-            var fileName = BuildPdfFileName(client, ref loginData, metasonicDocId, row, invoiceId, detectedExt);
+            Console.WriteLine("  [4/5] File downloaded (" + pdf.Length + " bytes, detected type: " + detectedExt + ").");
 
             try
             {
-                var itemTypeNum = MetasonicUploadHelper.GetItemTypeNumber(fileName);
-                Console.WriteLine($"  [5/5] Appending file to MetaSonic document {metasonicDocId} (ItemTypeNumber={itemTypeNum}, fileName='{fileName}')...");
-                MetasonicUploadHelper.AppendDocumentPdfItem(
-                    client,
-                    ref loginData,
-                    metasonicDocId,
-                    pdf,
-                    fileName);
-                Console.WriteLine($"  [5/5] PDF appended as '{fileName}'.");
+                string metasonicDocId = null;
+
+                if (!string.IsNullOrWhiteSpace(correlationQualId) && !string.IsNullOrWhiteSpace(correlationValue))
+                {
+                    var found = MetasonicSearchHelper.FindExistingByCorrelationValue(
+                        client,
+                        ref loginData,
+                        correlationValue,
+                        correlationQualId,
+                        DmsEnvironment.MetasonicDocClassId(),
+                        DmsEnvironment.MetasonicSearchUserFolderId());
+
+                    if (found != null && !string.IsNullOrEmpty(found.ID))
+                    {
+                        metasonicDocId = found.ID;
+                        Console.WriteLine("  [5/5] Found existing MetaSonic document " + metasonicDocId + " via qualifier " + correlationQualId + "='" + correlationValue + "'.");
+                    }
+                    else if (!allowCreate)
+                    {
+                        throw new InvalidOperationException(
+                            "MetaSonic: no document found for qualifier " + correlationQualId + "='" + correlationValue + "' (set DMS_WORKER_ALLOW_CREATE_DMS_DOCUMENT=true to create new documents).");
+                    }
+                }
+                else if (!allowCreate)
+                {
+                    metasonicDocId = correlationValue;
+                }
+
+                if (string.IsNullOrEmpty(metasonicDocId) && allowCreate)
+                {
+                    var fileName = BuildPdfFileName(client, ref loginData, null, row, invoiceId, detectedExt);
+                    var fields = MetasonicUploadHelper.BuildFieldsFromInvoiceJson(
+                        row,
+                        correlationValue ?? invoiceId,
+                        correlationQualId);
+
+                    Console.WriteLine("  [5/5] Creating new MetaSonic document in DocClass " + DmsEnvironment.MetasonicDocClassId() + " (fileName='" + fileName + "')...");
+                    var created = MetasonicUploadHelper.SaveNewDocument(
+                        client,
+                        ref loginData,
+                        fields,
+                        pdf,
+                        fileName,
+                        DmsEnvironment.MetasonicDocClassId());
+                    metasonicDocId = created != null ? created.ID : null;
+                    Console.WriteLine("  [5/5] Created MetaSonic document " + metasonicDocId + " with '" + fileName + "'.");
+                }
+                else
+                {
+                    var fileName = BuildPdfFileName(client, ref loginData, metasonicDocId, row, invoiceId, detectedExt);
+                    var itemTypeNum = MetasonicUploadHelper.GetItemTypeNumber(fileName);
+                    Console.WriteLine("  [5/5] Appending file to MetaSonic document " + metasonicDocId + " (ItemTypeNumber=" + itemTypeNum + ", fileName='" + fileName + "')...");
+                    MetasonicUploadHelper.AppendDocumentPdfItem(
+                        client,
+                        ref loginData,
+                        metasonicDocId,
+                        pdf,
+                        fileName);
+                    Console.WriteLine("  [5/5] PDF appended as '" + fileName + "'.");
+                }
 
                 var qualUpdates = new Dictionary<string, string>();
                 var syncedQualId = DmsEnvironment.MetasonicComstructSyncedQualifierId();
@@ -368,42 +421,48 @@ namespace MetasonicDocumentUploadPoC
                     qualUpdates[urlQualId] = "https://app.comstruct.com/invoices/" + invoiceId;
                 }
 
-                if (qualUpdates.Count > 0)
+                if (qualUpdates.Count > 0 && !string.IsNullOrEmpty(metasonicDocId))
                 {
                     try
                     {
                         MetasonicUploadHelper.SetDocumentQualifiers(
                             client, ref loginData, metasonicDocId, qualUpdates);
-                        Console.WriteLine($"  [5/5] Qualifiers updated ({qualUpdates.Count} field(s)).");
+                        Console.WriteLine("  [5/5] Qualifiers updated (" + qualUpdates.Count + " field(s)).");
                     }
                     catch (Exception qEx)
                     {
-                        Console.WriteLine($"  Warning: could not update qualifiers: {qEx.Message}");
+                        Console.WriteLine("  Warning: could not update qualifiers: " + qEx.Message);
                     }
                 }
 
                 PatchDms(comstruct, invoiceId, "SYNCED", null);
-                Console.WriteLine($"  [5/5] Comstruct external_status set to SYNCED.");
+                Console.WriteLine("  [5/5] Comstruct external_status set to SYNCED.");
 
-                try
+                var callbackId = !string.IsNullOrWhiteSpace(GetStr(row, "external_id"))
+                    ? GetStr(row, "external_id")
+                    : metasonicDocId;
+                if (!string.IsNullOrWhiteSpace(callbackId))
                 {
-                    comstruct.PostInvoiceCallback(metasonicDocId, true);
-                    Console.WriteLine($"  [5/5] Comstruct invoice status set to CHECKED.");
-                }
-                catch (Exception cbEx)
-                {
-                    Console.WriteLine($"  Warning: could not set invoice status to CHECKED: {cbEx.Message}");
+                    try
+                    {
+                        comstruct.PostInvoiceCallback(callbackId, true);
+                        Console.WriteLine("  [5/5] Comstruct invoice status set to CHECKED.");
+                    }
+                    catch (Exception cbEx)
+                    {
+                        Console.WriteLine("  Warning: could not set invoice status to CHECKED: " + cbEx.Message);
+                    }
                 }
 
                 return true;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"  ERROR invoice {invoiceId}: {ex.Message}");
+                Console.WriteLine("  ERROR invoice " + invoiceId + ": " + ex.Message);
                 try
                 {
                     PatchDms(comstruct, invoiceId, "FAILED", ex.Message);
-                    Console.WriteLine($"  Comstruct status set to FAILED.");
+                    Console.WriteLine("  Comstruct status set to FAILED.");
                 }
                 catch
                 {
