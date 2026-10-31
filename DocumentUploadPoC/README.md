@@ -10,7 +10,7 @@ Automatisierter Hintergrund-Worker (`run.bat` / `DmsUploadWorker.cs`), der in ei
 3. Liest Kreditor und Projekt/Kostenstelle aus den MetaSonic-Qualifizierern aus (entweder über konfigurierte Qualifier-IDs oder vollautomatisch anhand der Feldnamen in der Dokumentenklasse):
    - Stellt sicher, dass der **Lieferant** in Comstruct existiert (`POST /v1/suppliers`, Fallback `external_id = <DocID>`).
    - Prüft per `GET /v1/projects/byExternalId` bzw. `byNumber`, ob das **Projekt** in Comstruct existiert; falls nicht, wird es per `POST /v1/projects` angelegt (mit Namensauflösung aus der MetaSonic-Kostenstellen-Dokumentenklasse `METASONIC_PROJECTS_DOC_CLASS_ID=89035003` bzw. Fallback `external_id = <DocID>`).
-4. Lädt die Original-Rechnungsdatei (`GetItemData`) aus MetaSonic und legt die Rechnung in Comstruct mit `external_id = <DocID>` an (`POST /v1/invoices/custom` bzw. Fallback `POST /v1/workflows/trigger`).
+4. Lädt die Original-Rechnungsdatei (`GetItemData`) aus MetaSonic und übergibt die Rechnung samt Kreditorennummer (`creditor_number`), Projektnummer (`project_number`), Beträgen, Datumsfeldern und eventuellen Kontierungszeilen (`GetAccountingTable`) über **`POST /v1/workflows/trigger`** (`external_id = <DocID>`) an Comstruct.
 5. Speichert `lastMetasonicCheckAt` und die importierte `DocID` sofort in `.dms-worker-state.json`.
 
 ### Phase 2: Comstruct → MetaSonic (`RunPhase2ComstructToMetasonic`)

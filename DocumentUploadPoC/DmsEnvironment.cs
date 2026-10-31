@@ -181,10 +181,6 @@ namespace MetasonicDocumentUploadPoC
             return Math.Max(10, int.TryParse(Env("METASONIC_SCAN_MAX_RESULTS"), out n) ? n : 500);
         }
 
-        /// <summary>
-        /// When true (default), Phase 1 scans MetaSonic for newly created/updated invoices and imports them into Comstruct
-        /// (ensuring supplier and project exist in Comstruct first).
-        /// </summary>
         public static bool MetasonicInboundSyncEnabled()
         {
             var v = Env("METASONIC_INBOUND_SYNC", "true");
@@ -192,14 +188,14 @@ namespace MetasonicDocumentUploadPoC
                    !string.Equals("false", v, StringComparison.OrdinalIgnoreCase);
         }
 
-        public static string QualifierSupplierName()
+        public static string QualifierCreditorNumber()
         {
-            return Env("METASONIC_QUAL_SUPPLIER_NAME", "89900207");
+            return Env("METASONIC_QUAL_CREDITOR_NUMBER", Env("METASONIC_QUAL_SUPPLIER_NUMBER"));
         }
 
-        public static string QualifierSupplierNumber()
+        public static string QualifierCreditorName()
         {
-            return Env("METASONIC_QUAL_SUPPLIER_NUMBER");
+            return Env("METASONIC_QUAL_CREDITOR_NAME", Env("METASONIC_QUAL_SUPPLIER_NAME", "89900207"));
         }
 
         public static string QualifierProjectNumber()
@@ -217,6 +213,21 @@ namespace MetasonicDocumentUploadPoC
             return Env("METASONIC_QUAL_INVOICE_NUMBER", "89900202");
         }
 
+        public static string QualifierInvoiceDate()
+        {
+            return Env("METASONIC_QUAL_INVOICE_DATE");
+        }
+
+        public static string QualifierDueDate()
+        {
+            return Env("METASONIC_QUAL_DUE_DATE");
+        }
+
+        public static string QualifierReceiptDate()
+        {
+            return Env("METASONIC_QUAL_RECEIPT_DATE");
+        }
+
         public static string QualifierNetAmount()
         {
             return Env("METASONIC_QUAL_NET_AMOUNT", "89900131");
@@ -227,9 +238,29 @@ namespace MetasonicDocumentUploadPoC
             return Env("METASONIC_QUAL_GROSS_AMOUNT");
         }
 
-        public static string QualifierInvoiceDate()
+        public static string QualifierTaxAmount()
         {
-            return Env("METASONIC_QUAL_INVOICE_DATE");
+            return Env("METASONIC_QUAL_TAX_AMOUNT");
+        }
+
+        public static string QualifierTenant()
+        {
+            return Env("METASONIC_QUAL_TENANT", "89000001");
+        }
+
+        public static string QualifierPaymentTerm()
+        {
+            return Env("METASONIC_QUAL_PAYMENT_TERM");
+        }
+
+        public static string QualifierAssignee()
+        {
+            return Env("METASONIC_QUAL_ASSIGNEE");
+        }
+
+        public static string QualifierComment()
+        {
+            return Env("METASONIC_QUAL_COMMENT");
         }
 
         public static string MetasonicDmsCorrelationKey()

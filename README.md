@@ -2,11 +2,11 @@
 
 Leichtgewichtiger, bidirektionaler Hintergrund-Worker (`DocumentUploadPoC\run.bat`) für Windows Server zur vollautomatischen Synchronisation zwischen **MetaSonic Scanview DMS** und **Comstruct**:
 
-1. **Phase 1 — MetaSonic → Comstruct (Rechnungs-Import & Auto-Anlage von Kreditor/Projekt):**
+1. **Phase 1 — MetaSonic → Comstruct (Rechnungs-Import via `POST /v1/workflows/trigger` & Auto-Anlage von Kreditor/Projekt):**
    - Prüft in MetaSonic alle Rechnungen in `METASONIC_DOC_CLASS_ID`, die seit dem letzten gespeicherten Zeitstempel (`lastMetasonicCheckAt` in `.dms-worker-state.json`) erstellt oder aktualisiert wurden.
    - Prüft für jedes MetaSonic-Dokument, ob die Rechnung bereits in Comstruct existiert (anhand `external_id = <MetaSonic-DocumentID>`).
-   - Prüft, ob **Lieferant (Kreditor)** und **Projekt (Kostenstelle)** bereits in Comstruct existieren; falls nicht, werden sie automatisch in Comstruct angelegt (mit der Kreditoren-/Projektnummer bzw. der `documentId` als `external_id`, inkl. automatischer Namensauflösung über die MetaSonic-Kostenstellenklasse `89035003`).
-   - Lädt das Rechnungs-PDF/-TIFF aus MetaSonic herunter und legt die Rechnung in Comstruct mit der MetaSonic-`documentId` als `external_id` an.
+   - Prüft, ob **Lieferant (`creditor_number`)** und **Projekt (`project_number`)** bereits in Comstruct existieren; falls nicht, werden sie automatisch in Comstruct angelegt (mit `creditor_number` bzw. `project_number` / `documentId` als `external_id`, inkl. automatischer Namensauflösung über die MetaSonic-Kostenstellenklasse `89035003`).
+   - Lädt das Rechnungs-PDF/-TIFF aus MetaSonic herunter und übergibt die Rechnung samt Qualifizierern, Kreditorennummer (`creditor_number`) und eventuellen Kontierungszeilen (`GetAccountingTable`) über **`POST /v1/workflows/trigger`** mit der MetaSonic-`documentId` als `external_id` an Comstruct.
 
 2. **Phase 2 — Comstruct → MetaSonic (Rückübertragung geprüfter Rechnungen mit Stempel):**
    - Prüft in Comstruct alle Rechnungen im Status `CHECKED` (`COMSTRUCT_DMS_QUEUE_STATUS`), die seit dem letzten gespeicherten Zeitstempel (`lastComstructCheckAt` in `.dms-worker-state.json`) aktualisiert wurden und noch nicht als verarbeitet (`external_status = SYNCED`) markiert sind.

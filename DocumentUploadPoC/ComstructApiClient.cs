@@ -52,9 +52,6 @@ namespace MetasonicDocumentUploadPoC
             return _json.DeserializeObject(body) as Dictionary<string, object>;
         }
 
-        /// <summary>
-        /// Lists all recent invoices from Comstruct (optionally filtered by status).
-        /// </summary>
         public List<Dictionary<string, object>> ListInvoices(string statusFilter = null, int limit = 0)
         {
             var baseUrl = DmsEnvironment.ComstructBaseUrl();
@@ -123,70 +120,89 @@ namespace MetasonicDocumentUploadPoC
         }
 
         /// <summary>
-        /// Uploads a new invoice from MetaSonic into Comstruct with <paramref name="documentId"/> as <c>external_id</c>.
-        /// Tries <c>POST /v1/invoices/custom</c> (with preset headers <c>archivdocument</c>, <c>kreditorname</c>, <c>projekt</c>)
-        /// and falls back to <c>POST /v1/workflows/trigger</c> if the API key is customer-scoped.
+        /// Submits an invoice from MetaSonic to Comstruct via <c>POST /v1/workflows/trigger</c>
+        /// (<see href="https://developer.comstruct.com/api-reference/workflows-trigger#workflow-ausloesen"/>),
+        /// passing <paramref name="documentId"/> as <c>external_id</c> and matching the supplier via <c>creditor_number</c>.
         /// </summary>
-        public string UploadInvoiceFromMetasonic(
+        public string TriggerInvoiceWorkflow(
             string documentId,
             byte[] fileBytes,
-            string fileName,
-            string supplierName,
-            string supplierNumber,
+            string creditorNumber,
+            string creditorName,
             string projectNumber,
             string invoiceNumber,
             string invoiceDateIso,
+            string dueDateIso,
+            string receiptDateIso,
             double? netAmount,
-            double? grossAmount)
+            double? totalAmount,
+            double? totalTaxAmount,
+            string tenant,
+            string paymentTermNumber = null,
+            string assignee = null,
+            string comment = null,
+            List<Dictionary<string, object>> accounts = null)
         {
             if (fileBytes == null || fileBytes.Length == 0)
             {
-                throw new InvalidOperationException("Cannot upload empty file for MetaSonic document " + documentId);
+                throw new InvalidOperationException("Cannot trigger workflow with empty file for MetaSonic document " + documentId);
             }
 
-            var ext = MetasonicUploadHelper.DetectFileExtension(fileBytes);
-            var mediaType = (ext == ".tif" || ext == ".tiff") ? "image/tiff" : "application/pdf";
-
-            var customUrl = DmsEnvironment.ComstructBaseUrl() + ApiPath("invoices/custom");
-            var customReq = new HttpRequestMessage(HttpMethod.Post, customUrl);
-            customReq.Content = new ByteArrayContent(fileBytes);
-            customReq.Content.Headers.ContentType = new MediaTypeHeaderValue(mediaType);
-            customReq.Headers.TryAddWithoutValidation("archivdocument", documentId);
-            if (!string.IsNullOrWhiteSpace(supplierName))
-            {
-                customReq.Headers.TryAddWithoutValidation("kreditorname", supplierName.Trim());
-            }
-            if (!string.IsNullOrWhiteSpace(projectNumber))
-            {
-                customReq.Headers.TryAddWithoutValidation("projekt", projectNumber.Trim());
-            }
-
-            var customResp = _http.SendAsync(customReq).GetAwaiter().GetResult();
-            var customBody = customResp.Content.ReadAsStringAsync().GetAwaiter().GetResult();
-            if (customResp.IsSuccessStatusCode)
-            {
-                return customBody;
-            }
-
-            // Fallback to POST /v1/workflows/trigger (customer-scoped API key)
-            var triggerPayload = new Dictionary<string, object>();
-            triggerPayload["external_id"] = documentId;
-            triggerPayload["base64document"] = Convert.ToBase64String(fileBytes);
-            triggerPayload["project_number"] = !string.IsNullOrWhiteSpace(projectNumber) ? projectNumber.Trim() : documentId;
-            triggerPayload["creditor_name"] = !string.IsNullOrWhiteSpace(supplierName) ? supplierName.Trim() : ("Kreditor " + documentId);
-            if (!string.IsNullOrWhiteSpace(supplierNumber))
-            {
-                triggerPayload["creditor_number"] = supplierNumber.Trim();
-            }
-            triggerPayload["invoice_number"] = !string.IsNullOrWhiteSpace(invoiceNumber) ? invoiceNumber.Trim() : documentId;
-            triggerPayload["invoice_date"] = !string.IsNullOrWhiteSpace(invoiceDateIso)
+            var resolvedCreditorNo = !string.IsNullOrWhiteSpace(creditorNumber) ? creditorNumber.Trim() : documentId;
+            var resolvedCreditorName = !string.IsNullOrWhiteSpace(creditorName) ? creditorName.Trim() : ("Kreditor " + resolvedCreditorNo);
+            var resolvedProjectNo = !string.IsNullOrWhiteSpace(projectNumber) ? projectNumber.Trim() : documentId;
+            var resolvedInvoiceNo = !string.IsNullOrWhiteSpace(invoiceNumber) ? invoiceNumber.Trim() : documentId;
+            var resolvedInvoiceDate = !string.IsNullOrWhiteSpace(invoiceDateIso)
                 ? invoiceDateIso
                 : DateTime.UtcNow.ToString("yyyy-MM-dd");
-            triggerPayload["net_amount"] = netAmount ?? 0.0;
-            triggerPayload["total_amount"] = grossAmount ?? (netAmount ?? 0.0);
-            triggerPayload["tenant"] = DmsEnvironment.ComstructTenant();
+            var resolvedNet = netAmount ?? (totalAmount ?? 0.0);
+            var resolvedTotal = totalAmount ?? (netAmount ?? 0.0);
+            var resolvedTenant = !string.IsNullOrWhiteSpace(tenant) ? tenant.Trim() : DmsEnvironment.ComstructTenant();
 
-            return PostJson("workflows/trigger", triggerPayload);
+            var payload = new Dictionary<string, object>();
+            payload["external_id"] = documentId;
+            payload["base64document"] = Convert.ToBase64String(fileBytes);
+            payload["project_number"] = resolvedProjectNo;
+            payload["creditor_number"] = resolvedCreditorNo;
+            payload["creditor_name"] = resolvedCreditorName;
+            payload["invoice_number"] = resolvedInvoiceNo;
+            payload["invoice_date"] = resolvedInvoiceDate;
+            payload["currency"] = "EUR";
+            payload["net_amount"] = resolvedNet;
+            payload["total_amount"] = resolvedTotal;
+            payload["tenant"] = resolvedTenant;
+            payload["document_type"] = "INVOICE";
+
+            if (!string.IsNullOrWhiteSpace(dueDateIso))
+            {
+                payload["due_date"] = dueDateIso;
+            }
+            if (!string.IsNullOrWhiteSpace(receiptDateIso))
+            {
+                payload["receipt_date"] = receiptDateIso;
+            }
+            if (totalTaxAmount.HasValue)
+            {
+                payload["total_tax_amount"] = totalTaxAmount.Value;
+            }
+            if (!string.IsNullOrWhiteSpace(paymentTermNumber))
+            {
+                payload["payment_term_number"] = paymentTermNumber.Trim();
+            }
+            if (!string.IsNullOrWhiteSpace(assignee))
+            {
+                payload["assignee"] = assignee.Trim();
+            }
+            if (!string.IsNullOrWhiteSpace(comment))
+            {
+                payload["comment"] = comment.Trim();
+            }
+            if (accounts != null && accounts.Count > 0)
+            {
+                payload["accounts"] = accounts;
+            }
+
+            return PostJson("workflows/trigger", payload);
         }
 
         private List<Dictionary<string, object>> ParseInvoiceRows(string json)

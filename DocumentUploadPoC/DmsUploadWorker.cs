@@ -15,8 +15,9 @@ namespace MetasonicDocumentUploadPoC
     /// Phase 1 (MetaSonic → Comstruct):
     ///   - Checks invoices in MetaSonic updated since the last persisted watermark.
     ///   - Checks if each invoice already exists in Comstruct (by external_id = MetaSonic Document ID).
-    ///   - Ensures the supplier and project exist in Comstruct (upserting them if missing).
-    ///   - Creates the invoice in Comstruct with the MetaSonic Document ID as external_id.
+    ///   - Ensures the supplier (keyed by creditor_number) and project exist in Comstruct (upserting them if missing).
+    ///   - Submits the invoice via POST /v1/workflows/trigger with the MetaSonic Document ID as external_id,
+    ///     creditor_number, creditor_name, project_number, amounts, dates, and optional AccountingTable rows.
     /// Phase 2 (Comstruct → MetaSonic):
     ///   - Fetches all invoices in Comstruct marked as checked (COMSTRUCT_DMS_QUEUE_STATUS, default CHECKED)
     ///     since the last persisted check that do not yet have external_status = SYNCED.
@@ -103,7 +104,7 @@ namespace MetasonicDocumentUploadPoC
         }
 
         // =====================================================================
-        // PHASE 1: MetaSonic → Comstruct (New/Updated Invoices + Supplier/Project)
+        // PHASE 1: MetaSonic → Comstruct (POST /v1/workflows/trigger)
         // =====================================================================
         private static void RunPhase1MetasonicToComstruct(
             ComstructApiClient comstruct,
@@ -128,7 +129,6 @@ namespace MetasonicDocumentUploadPoC
                 return;
             }
 
-            // Pre-load recent Comstruct invoices so we can check existence in memory first
             var knownExternalIds = new HashSet<string>(state.ImportedMetasonicDocIds, StringComparer.OrdinalIgnoreCase);
             try
             {
@@ -147,7 +147,6 @@ namespace MetasonicDocumentUploadPoC
                 Console.WriteLine("  Note: Could not pre-fetch Comstruct invoice list (" + ex.Message + "), will check per document.");
             }
 
-            // Optional lookup maps from MetaSonic master-data DocClasses (e.g. 89035003 Kostenstellen)
             Dictionary<string, string> masterProjects = null;
             DateTime maxSeenUtc = lastWatermarkUtc ?? new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
             int importedCount = 0;
@@ -172,11 +171,9 @@ namespace MetasonicDocumentUploadPoC
                     continue;
                 }
 
-                // Fetch full document qualifiers and item list
                 var fullDoc = client.GetDocument(ref loginData, docId, loadItemData: false, smallDocument: false, smallFieldList: false, mergeBackgroundImage: false)
                     ?? summaryDoc;
 
-                // Skip if already marked as synced by Comstruct
                 var syncedQualId = DmsEnvironment.MetasonicComstructSyncedQualifierId();
                 if (!string.IsNullOrEmpty(syncedQualId))
                 {
@@ -189,38 +186,72 @@ namespace MetasonicDocumentUploadPoC
                     }
                 }
 
-                // Extract supplier, project, and invoice fields from MetaSonic qualifiers
-                string supplierName = ResolveFieldByConfigOrName(fullDoc, fieldNames, DmsEnvironment.QualifierSupplierName(), "kreditor", "lieferant", "name", "geschäftspartner");
-                string supplierNumber = ResolveFieldByConfigOrName(fullDoc, fieldNames, DmsEnvironment.QualifierSupplierNumber(), "krednr", "kreditorennummer", "kreditornr", "lieferantennr");
-                string projectNumber = ResolveFieldByConfigOrName(fullDoc, fieldNames, DmsEnvironment.QualifierProjectNumber(), "kostenstelle", "kst", "baustelle", "projekt");
-                string projectTitle = ResolveFieldByConfigOrName(fullDoc, fieldNames, DmsEnvironment.QualifierProjectTitle(), "baustellenbezeichnung", "kostenstellenbezeichnung", "projektname");
-                string invoiceNumber = ResolveFieldByConfigOrName(fullDoc, fieldNames, DmsEnvironment.QualifierInvoiceNumber(), "belegnr", "belegnummer", "rechnungsnummer", "rechnung");
-                string netAmountStr = ResolveFieldByConfigOrName(fullDoc, fieldNames, DmsEnvironment.QualifierNetAmount(), "netto", "betrag", "nettobetrag");
-                string grossAmountStr = ResolveFieldByConfigOrName(fullDoc, fieldNames, DmsEnvironment.QualifierGrossAmount(), "brutto", "gesamtbetrag", "bruttobetrag");
-                string invoiceDateStr = ResolveFieldByConfigOrName(fullDoc, fieldNames, DmsEnvironment.QualifierInvoiceDate(), "belegdatum", "rechnungsdatum", "datum");
+                // 2. Map MetaSonic qualifiers -> Comstruct /v1/workflows/trigger fields
+                string creditorNumber = ResolveFieldByConfigOrName(fullDoc, fieldNames, DmsEnvironment.QualifierCreditorNumber(),
+                    "krednr", "kreditorennummer", "kreditornr", "kreditor-nr", "lieferantennr", "lieferantennummer", "creditor_number");
+                string creditorName = ResolveFieldByConfigOrName(fullDoc, fieldNames, DmsEnvironment.QualifierCreditorName(),
+                    "kredbezeichnung", "kreditorname", "kreditor", "lieferant", "geschäftspartner", "creditor_name");
+                string projectNumber = ResolveFieldByConfigOrName(fullDoc, fieldNames, DmsEnvironment.QualifierProjectNumber(),
+                    "kostenstelle", "kstnr", "kst", "baustelle", "projekt", "project_number");
+                string projectTitle = ResolveFieldByConfigOrName(fullDoc, fieldNames, DmsEnvironment.QualifierProjectTitle(),
+                    "baustellenbezeichnung", "kostenstellenbezeichnung", "projektname", "kstbezeichnung");
+                string invoiceNumber = ResolveFieldByConfigOrName(fullDoc, fieldNames, DmsEnvironment.QualifierInvoiceNumber(),
+                    "belegnr", "belegnummer", "rechnungsnummer", "rechnung", "invoice_number");
+                string invoiceDateRaw = ResolveFieldByConfigOrName(fullDoc, fieldNames, DmsEnvironment.QualifierInvoiceDate(),
+                    "belegdatum", "rechnungsdatum", "datum", "invoice_date");
+                string dueDateRaw = ResolveFieldByConfigOrName(fullDoc, fieldNames, DmsEnvironment.QualifierDueDate(),
+                    "fällig", "faellig", "fälligkeitsdatum", "netto fällig", "due_date");
+                string receiptDateRaw = ResolveFieldByConfigOrName(fullDoc, fieldNames, DmsEnvironment.QualifierReceiptDate(),
+                    "eingangsdatum", "buchungsdatum", "erfassungsdatum", "receipt_date");
+                string netAmountStr = ResolveFieldByConfigOrName(fullDoc, fieldNames, DmsEnvironment.QualifierNetAmount(),
+                    "netto", "nettobetrag", "betrag netto", "betrag", "net_amount");
+                string grossAmountStr = ResolveFieldByConfigOrName(fullDoc, fieldNames, DmsEnvironment.QualifierGrossAmount(),
+                    "brutto", "bruttobetrag", "gesamtbetrag", "rechnungsbetrag", "total_amount");
+                string taxAmountStr = ResolveFieldByConfigOrName(fullDoc, fieldNames, DmsEnvironment.QualifierTaxAmount(),
+                    "steuerbetrag", "mwst", "ust", "umsatzsteuer", "total_tax_amount");
+                string tenantVal = ResolveFieldByConfigOrName(fullDoc, fieldNames, DmsEnvironment.QualifierTenant(),
+                    "betrnr", "betriebsnummer", "mandant", "buchungskreis", "firma", "tenant");
+                string paymentTermVal = ResolveFieldByConfigOrName(fullDoc, fieldNames, DmsEnvironment.QualifierPaymentTerm(),
+                    "zahlungsbedingung", "zb", "zahlbed");
+                string assigneeVal = ResolveFieldByConfigOrName(fullDoc, fieldNames, DmsEnvironment.QualifierAssignee(),
+                    "prüfer", "pruefer", "bauleiter", "bearbeiter", "empfänger");
+                string commentVal = ResolveFieldByConfigOrName(fullDoc, fieldNames, DmsEnvironment.QualifierComment(),
+                    "bemerkung", "kommentar", "buchungstext", "notiz");
 
-                Console.WriteLine("  [New DMS Invoice] DocID=" + docId + " | Supplier='" + (supplierName ?? "-") + "' | Project='" + (projectNumber ?? "-") + "' | BelegNr='" + (invoiceNumber ?? "-") + "'");
+                // Also inspect MetaSonic AccountingTable (if used) for pre-assigned accounts or fallback project_number
+                var accountingRows = ExtractAccountingRowsFromMetasonic(client, ref loginData, docId, ref projectNumber);
+
+                // Resolve effective creditor_number and project_number (falling back to docId if empty on the DMS document)
+                var effectiveCreditorNumber = !string.IsNullOrWhiteSpace(creditorNumber) ? creditorNumber.Trim() : docId;
+                var effectiveCreditorName = !string.IsNullOrWhiteSpace(creditorName) ? creditorName.Trim() : ("Kreditor " + effectiveCreditorNumber);
+                var effectiveProjectNumber = !string.IsNullOrWhiteSpace(projectNumber) ? projectNumber.Trim() : docId;
+
+                Console.WriteLine(
+                    "  [New DMS Invoice] DocID=" + docId +
+                    " | Creditor=" + effectiveCreditorNumber + " ('" + effectiveCreditorName + "')" +
+                    " | Project=" + effectiveProjectNumber +
+                    " | BelegNr='" + (invoiceNumber ?? docId) + "'");
 
                 if (dry)
                 {
-                    Console.WriteLine("    [dry-run] Would ensure supplier & project exist and upload MetaSonic doc " + docId + " as external_id='" + docId + "'");
+                    Console.WriteLine("    [dry-run] Would ensure supplier (creditor_number='" + effectiveCreditorNumber + "') & project ('" + effectiveProjectNumber + "') exist and trigger workflow with external_id='" + docId + "'");
                     importedCount++;
                     continue;
                 }
 
                 try
                 {
-                    // 2. Ensure Supplier exists in Comstruct (if not, create with external_id = supplierNumber or docId)
-                    EnsureSupplierInComstruct(comstruct, docId, supplierNumber, supplierName);
+                    // 3. Ensure Supplier exists in Comstruct keyed by creditor_number (or docId if missing)
+                    EnsureSupplierByCreditorNumber(comstruct, effectiveCreditorNumber, effectiveCreditorName);
 
-                    // 3. Ensure Project exists in Comstruct (check first; if not, create with external_id = projectNumber or docId)
+                    // 4. Ensure Project exists in Comstruct keyed by project_number (or docId if missing)
                     if (masterProjects == null && !string.IsNullOrWhiteSpace(DmsEnvironment.MetasonicProjectsDocClassId()))
                     {
                         masterProjects = LoadMasterProjectsMapFromMetasonic(client, ref loginData, DmsEnvironment.MetasonicProjectsDocClassId());
                     }
-                    EnsureProjectInComstruct(comstruct, docId, projectNumber, projectTitle, masterProjects);
+                    EnsureProjectInComstruct(comstruct, docId, effectiveProjectNumber, projectTitle, masterProjects);
 
-                    // 4. Download original invoice PDF/TIFF from MetaSonic
+                    // 5. Download original invoice PDF/TIFF from MetaSonic
                     var fileTuple = DownloadPrimaryItemFromMetasonic(client, ref loginData, docId, fullDoc);
                     if (fileTuple == null || fileTuple.Item1 == null || fileTuple.Item1.Length == 0)
                     {
@@ -228,20 +259,34 @@ namespace MetasonicDocumentUploadPoC
                         continue;
                     }
 
-                    // 5. Create invoice in Comstruct with documentId as external_id
-                    var resp = comstruct.UploadInvoiceFromMetasonic(
+                    // 6. Trigger workflow in Comstruct via POST /v1/workflows/trigger
+                    var invoiceDateIso = FormatDateIso(invoiceDateRaw) ?? FormatDateIso(fullDoc.CreationDate) ?? DateTime.UtcNow.ToString("yyyy-MM-dd");
+                    var dueDateIso = FormatDateIso(dueDateRaw);
+                    var receiptDateIso = FormatDateIso(receiptDateRaw) ?? FormatDateIso(fullDoc.CreationDate);
+                    var netAmount = ParseAmount(netAmountStr);
+                    var grossAmount = ParseAmount(grossAmountStr);
+                    var taxAmount = ParseAmount(taxAmountStr);
+
+                    comstruct.TriggerInvoiceWorkflow(
                         documentId: docId,
                         fileBytes: fileTuple.Item1,
-                        fileName: fileTuple.Item2,
-                        supplierName: supplierName,
-                        supplierNumber: supplierNumber,
-                        projectNumber: projectNumber,
+                        creditorNumber: effectiveCreditorNumber,
+                        creditorName: effectiveCreditorName,
+                        projectNumber: effectiveProjectNumber,
                         invoiceNumber: invoiceNumber,
-                        invoiceDateIso: FormatDateIso(invoiceDateStr),
-                        netAmount: ParseAmount(netAmountStr),
-                        grossAmount: ParseAmount(grossAmountStr));
+                        invoiceDateIso: invoiceDateIso,
+                        dueDateIso: dueDateIso,
+                        receiptDateIso: receiptDateIso,
+                        netAmount: netAmount,
+                        totalAmount: grossAmount,
+                        totalTaxAmount: taxAmount,
+                        tenant: !string.IsNullOrWhiteSpace(tenantVal) ? tenantVal : DmsEnvironment.ComstructTenant(),
+                        paymentTermNumber: paymentTermVal,
+                        assignee: (assigneeVal != null && assigneeVal.Contains("@")) ? assigneeVal : null,
+                        comment: commentVal,
+                        accounts: accountingRows);
 
-                    Console.WriteLine("    Uploaded MetaSonic doc " + docId + " to Comstruct (external_id='" + docId + "').");
+                    Console.WriteLine("    Triggered Comstruct workflow for MetaSonic doc " + docId + " (external_id='" + docId + "', creditor_number='" + effectiveCreditorNumber + "').");
                     knownExternalIds.Add(docId);
                     state.ImportedMetasonicDocIds.Add(docId);
                     importedCount++;
@@ -271,34 +316,120 @@ namespace MetasonicDocumentUploadPoC
             Console.WriteLine("  Phase 1 summary: imported=" + importedCount + ", alreadyInComstruct=" + skippedExisting + "\n");
         }
 
-        private static void EnsureSupplierInComstruct(
-            ComstructApiClient comstruct,
-            string documentId,
-            string supplierNumber,
-            string supplierName)
+        private static List<Dictionary<string, object>> ExtractAccountingRowsFromMetasonic(
+            ScanviewWebserviceClient client,
+            ref LoginData loginData,
+            string docId,
+            ref string projectNumberFallback)
         {
-            if (string.IsNullOrWhiteSpace(supplierName) && string.IsNullOrWhiteSpace(supplierNumber))
+            var list = new List<Dictionary<string, object>>();
+            try
             {
-                return;
+                var accTable = client.GetAccountingTable(ref loginData, docId, withFields: true);
+                if (accTable == null || accTable.Rows == null || accTable.Rows.Length == 0)
+                {
+                    return list;
+                }
+
+                var colNames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                if (accTable.Fields != null)
+                {
+                    foreach (var f in accTable.Fields)
+                    {
+                        if (!string.IsNullOrEmpty(f.ID)) colNames[f.ID] = f.Name ?? string.Empty;
+                    }
+                }
+
+                foreach (var r in accTable.Rows)
+                {
+                    if (r.Columns == null) continue;
+                    string accNo = null;
+                    string projNo = null;
+                    string taxCode = null;
+                    double? net = null;
+                    double? gross = null;
+                    double? tax = null;
+
+                    foreach (var c in r.Columns)
+                    {
+                        if (string.IsNullOrWhiteSpace(c.Value)) continue;
+                        string cn;
+                        colNames.TryGetValue(c.FieldID ?? "", out cn);
+                        var label = (cn ?? c.FieldID ?? "").ToLowerInvariant();
+                        var val = c.Value.Trim();
+
+                        if (accNo == null && (label.Contains("konto") || label.Contains("sachkonto") || label.Contains("ktonr")))
+                        {
+                            accNo = val;
+                        }
+                        else if (projNo == null && (label.Contains("kostenstelle") || label.Contains("kst") || label.Contains("projekt") || label.Contains("baustelle")))
+                        {
+                            projNo = val;
+                        }
+                        else if (taxCode == null && (label.Contains("steuer") || label.Contains("ust") || label.Contains("mwst")))
+                        {
+                            taxCode = val;
+                        }
+                        else if (!net.HasValue && label.Contains("netto"))
+                        {
+                            net = ParseAmount(val);
+                        }
+                        else if (!gross.HasValue && (label.Contains("brutto") || label.Contains("betrag")))
+                        {
+                            gross = ParseAmount(val);
+                        }
+                    }
+
+                    if (string.IsNullOrWhiteSpace(projectNumberFallback) && !string.IsNullOrWhiteSpace(projNo))
+                    {
+                        projectNumberFallback = projNo;
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(accNo))
+                    {
+                        var netVal = net ?? (gross ?? 0.0);
+                        var grossVal = gross ?? netVal;
+                        var taxVal = tax ?? Math.Max(0.0, grossVal - netVal);
+
+                        var entry = new Dictionary<string, object>();
+                        entry["account_number"] = accNo;
+                        entry["net_amount"] = netVal;
+                        entry["gross_amount"] = grossVal;
+                        entry["tax_amount"] = taxVal;
+                        if (!string.IsNullOrWhiteSpace(projNo)) entry["project_number"] = projNo;
+                        if (!string.IsNullOrWhiteSpace(taxCode)) entry["tax_code_number"] = taxCode;
+                        list.Add(entry);
+                    }
+                }
+            }
+            catch
+            {
+                // AccountingTable is optional
             }
 
-            var extId = !string.IsNullOrWhiteSpace(supplierNumber) ? supplierNumber.Trim() : documentId;
-            var title = !string.IsNullOrWhiteSpace(supplierName) ? supplierName.Trim() : ("Kreditor " + extId);
+            return list;
+        }
+
+        private static void EnsureSupplierByCreditorNumber(
+            ComstructApiClient comstruct,
+            string creditorNumber,
+            string creditorName)
+        {
+            if (string.IsNullOrWhiteSpace(creditorNumber)) return;
 
             var sup = new Dictionary<string, object>();
-            sup["external_id"] = extId;
-            sup["title"] = title;
+            sup["external_id"] = creditorNumber.Trim();
+            sup["title"] = !string.IsNullOrWhiteSpace(creditorName) ? creditorName.Trim() : ("Kreditor " + creditorNumber.Trim());
             sup["country_code"] = "DE";
             sup["is_active"] = true;
 
             try
             {
                 comstruct.UpsertSuppliers(new List<Dictionary<string, object>> { sup });
-                Console.WriteLine("    Ensured supplier in Comstruct: external_id='" + extId + "', title='" + title + "'");
             }
             catch (Exception ex)
             {
-                Console.WriteLine("    Warning: could not upsert supplier '" + title + "': " + ex.Message);
+                Console.WriteLine("    Warning: could not upsert supplier '" + creditorNumber + "': " + ex.Message);
             }
         }
 
@@ -309,13 +440,8 @@ namespace MetasonicDocumentUploadPoC
             string projectTitle,
             Dictionary<string, string> masterProjects)
         {
-            if (string.IsNullOrWhiteSpace(projectNumber) && string.IsNullOrWhiteSpace(projectTitle))
-            {
-                return;
-            }
-
             var projNum = !string.IsNullOrWhiteSpace(projectNumber) ? projectNumber.Trim() : documentId;
-            var extId = !string.IsNullOrWhiteSpace(projectNumber) ? projectNumber.Trim() : documentId;
+            var extId = projNum;
 
             try
             {
@@ -365,7 +491,6 @@ namespace MetasonicDocumentUploadPoC
             var items = client.GetItemList(ref loginData, docId, false, false) ?? (doc != null ? doc.ItemList : null) ?? new ResponseItem[0];
             if (items.Length == 0) return null;
 
-            // Pick the first item that is not already a Comstruct-stamped attachment
             ResponseItem selected = items[0];
             foreach (var it in items)
             {
@@ -481,7 +606,6 @@ namespace MetasonicDocumentUploadPoC
                         return false;
                     }
 
-                    // If an invoice previously FAILED, retry it even if updated_at hasn't changed
                     if (string.Equals(ext, "FAILED", StringComparison.OrdinalIgnoreCase))
                     {
                         return true;
