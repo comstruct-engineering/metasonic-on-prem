@@ -68,6 +68,12 @@ namespace MetasonicCLI
                     case "worker":
                     case "dms-worker":
                         return DmsUploadWorker.Run();
+                    case "inbound":
+                    case "dms-inbound":
+                        return DmsUploadWorker.RunInboundOnly();
+                    case "outbound":
+                    case "dms-outbound":
+                        return DmsUploadWorker.RunOutboundOnly();
                     case "masterdata":
                     case "brz-sync":
                         return BrzMasterDataWorker.Run();

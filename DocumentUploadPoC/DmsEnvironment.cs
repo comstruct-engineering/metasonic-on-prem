@@ -3,7 +3,7 @@ using System.IO;
 
 namespace MetasonicDocumentUploadPoC
 {
-    /// <summary>Environment variables for the Comstruct ↔ MetaSonic DMS upload worker and BRZ sync.</summary>
+    /// <summary>Environment variables for the Comstruct ↔ MetaSonic DMS sync worker.</summary>
     internal static class DmsEnvironment
     {
         static DmsEnvironment()
@@ -53,45 +53,62 @@ namespace MetasonicDocumentUploadPoC
                 }
             }
         }
+
+        private static string Env(string key, string defaultVal = "")
+        {
+            var v = Environment.GetEnvironmentVariable(key);
+            return string.IsNullOrWhiteSpace(v) ? defaultVal : v.Trim();
+        }
+
         public static string ComstructBaseUrl()
         {
-            return (Environment.GetEnvironmentVariable("COMSTRUCT_NEST_URL") ?? "https://api.comstruct.com").TrimEnd('/');
+            return Env("COMSTRUCT_NEST_URL", "https://api.comstruct.com").TrimEnd('/');
         }
 
         public static string ComstructApiPrefix()
         {
-            return (Environment.GetEnvironmentVariable("COMSTRUCT_API_PREFIX") ?? "v1").Trim('/');
+            return Env("COMSTRUCT_API_PREFIX", "v1").Trim('/');
         }
 
         public static string ComstructApiKey()
         {
-            return Environment.GetEnvironmentVariable("COMSTRUCT_API_KEY") ?? string.Empty;
+            return Env("COMSTRUCT_API_KEY");
+        }
+
+        public static string ComstructTenant()
+        {
+            return Env("COMSTRUCT_TENANT", "default");
         }
 
         public static string QueueStatus()
         {
-            return Environment.GetEnvironmentVariable("COMSTRUCT_DMS_QUEUE_STATUS") ?? "PRICE_CHECKING";
+            return Env("COMSTRUCT_DMS_QUEUE_STATUS", "CHECKED");
+        }
+
+        public static string ProcessedExternalStatus()
+        {
+            return Env("COMSTRUCT_DMS_PROCESSED_STATUS", "SYNCED");
         }
 
         public static int ListLimit()
         {
             int n;
-            return Math.Min(500, Math.Max(1, int.TryParse(Environment.GetEnvironmentVariable("COMSTRUCT_DMS_LIMIT"), out n) ? n : 50));
+            return Math.Min(500, Math.Max(1, int.TryParse(Env("COMSTRUCT_DMS_LIMIT"), out n) ? n : 100));
         }
 
         public static string UpdatedAfterParam()
         {
-            return Environment.GetEnvironmentVariable("COMSTRUCT_DMS_UPDATED_AFTER_PARAM") ?? "updated_after";
+            return Env("COMSTRUCT_DMS_UPDATED_AFTER_PARAM", "updated_after");
         }
 
         public static string PatchPathTemplate()
         {
-            return Environment.GetEnvironmentVariable("COMSTRUCT_DMS_PATCH_PATH") ?? "/{prefix}/invoices/{id}/external-status";
+            return Env("COMSTRUCT_DMS_PATCH_PATH", "/{prefix}/invoices/{id}/external-status");
         }
 
         public static bool PdfAnnotations()
         {
-            var v = Environment.GetEnvironmentVariable("COMSTRUCT_PDF_ANNOTATIONS");
+            var v = Env("COMSTRUCT_PDF_ANNOTATIONS");
             if (string.Equals("0", v, StringComparison.Ordinal) ||
                 string.Equals("false", v, StringComparison.OrdinalIgnoreCase))
             {
@@ -101,13 +118,9 @@ namespace MetasonicDocumentUploadPoC
             return true;
         }
 
-        /// <summary>
-        /// When true (default), requests <c>GET .../pdf?overlay=true</c> so match-status boxes are embedded in the PDF.
-        /// Set <c>COMSTRUCT_PDF_OVERLAY=0</c> or <c>false</c> to omit the parameter.
-        /// </summary>
         public static bool PdfOverlay()
         {
-            var v = Environment.GetEnvironmentVariable("COMSTRUCT_PDF_OVERLAY");
+            var v = Env("COMSTRUCT_PDF_OVERLAY");
             if (string.Equals("0", v, StringComparison.Ordinal) ||
                 string.Equals("false", v, StringComparison.OrdinalIgnoreCase))
             {
@@ -119,160 +132,213 @@ namespace MetasonicDocumentUploadPoC
 
         public static string MetasonicEndpoint()
         {
-            return Environment.GetEnvironmentVariable("METASONIC_ENDPOINT") ?? string.Empty;
+            return Env("METASONIC_ENDPOINT");
         }
 
         public static string MetasonicUser()
         {
-            return Environment.GetEnvironmentVariable("METASONIC_USER") ?? string.Empty;
+            return Env("METASONIC_USER");
         }
 
         public static string MetasonicPassword()
         {
-            return Environment.GetEnvironmentVariable("METASONIC_PASSWORD") ?? string.Empty;
+            return Env("METASONIC_PASSWORD");
         }
 
         public static string MetasonicDatabase()
         {
-            return Environment.GetEnvironmentVariable("METASONIC_DB") ?? string.Empty;
+            return Env("METASONIC_DB");
         }
 
         public static string MetasonicDocClassId()
         {
-            return Environment.GetEnvironmentVariable("METASONIC_DOC_CLASS_ID") ?? "1";
+            return Env("METASONIC_DOC_CLASS_ID", "1");
+        }
+
+        public static string MetasonicProjectsDocClassId()
+        {
+            return Env("METASONIC_PROJECTS_DOC_CLASS_ID", "89035003");
+        }
+
+        public static string MetasonicSuppliersDocClassId()
+        {
+            return Env("METASONIC_SUPPLIERS_DOC_CLASS_ID");
         }
 
         public static string MetasonicComstructQualifierId()
         {
-            return Environment.GetEnvironmentVariable("METASONIC_COMSTRUCT_INVOICE_QUALIFIER_ID") ?? "";
+            return Env("METASONIC_COMSTRUCT_INVOICE_QUALIFIER_ID");
         }
 
         public static string MetasonicSearchUserFolderId()
         {
-            return Environment.GetEnvironmentVariable("METASONIC_SEARCH_USER_FOLDER_ID") ?? "";
+            return Env("METASONIC_SEARCH_USER_FOLDER_ID");
+        }
+
+        public static int MetasonicScanMaxResults()
+        {
+            int n;
+            return Math.Max(10, int.TryParse(Env("METASONIC_SCAN_MAX_RESULTS"), out n) ? n : 500);
         }
 
         /// <summary>
-        /// <c>external_id</c> (default) or <c>id</c> — value used for MetaSonic <c>Search</c> and correlation qualifier (must match DMS).
+        /// When true (default), Phase 1 scans MetaSonic for newly created/updated invoices and imports them into Comstruct
+        /// (ensuring supplier and project exist in Comstruct first).
         /// </summary>
+        public static bool MetasonicInboundSyncEnabled()
+        {
+            var v = Env("METASONIC_INBOUND_SYNC", "true");
+            return !string.Equals("0", v, StringComparison.Ordinal) &&
+                   !string.Equals("false", v, StringComparison.OrdinalIgnoreCase);
+        }
+
+        public static string QualifierSupplierName()
+        {
+            return Env("METASONIC_QUAL_SUPPLIER_NAME", "89900207");
+        }
+
+        public static string QualifierSupplierNumber()
+        {
+            return Env("METASONIC_QUAL_SUPPLIER_NUMBER");
+        }
+
+        public static string QualifierProjectNumber()
+        {
+            return Env("METASONIC_QUAL_PROJECT_NUMBER");
+        }
+
+        public static string QualifierProjectTitle()
+        {
+            return Env("METASONIC_QUAL_PROJECT_TITLE");
+        }
+
+        public static string QualifierInvoiceNumber()
+        {
+            return Env("METASONIC_QUAL_INVOICE_NUMBER", "89900202");
+        }
+
+        public static string QualifierNetAmount()
+        {
+            return Env("METASONIC_QUAL_NET_AMOUNT", "89900131");
+        }
+
+        public static string QualifierGrossAmount()
+        {
+            return Env("METASONIC_QUAL_GROSS_AMOUNT");
+        }
+
+        public static string QualifierInvoiceDate()
+        {
+            return Env("METASONIC_QUAL_INVOICE_DATE");
+        }
+
         public static string MetasonicDmsCorrelationKey()
         {
-            return string.Equals("id", Environment.GetEnvironmentVariable("METASONIC_DMS_CORRELATION_KEY"), StringComparison.OrdinalIgnoreCase)
+            return string.Equals("id", Env("METASONIC_DMS_CORRELATION_KEY"), StringComparison.OrdinalIgnoreCase)
                 ? "id"
                 : "external_id";
         }
 
         public static string DmsStateFile()
         {
-            return Environment.GetEnvironmentVariable("DMS_WORKER_STATE_FILE")
-                ?? System.IO.Path.Combine(Environment.CurrentDirectory, ".dms-worker-state.json");
+            var v = Env("DMS_WORKER_STATE_FILE");
+            return string.IsNullOrEmpty(v)
+                ? Path.Combine(Environment.CurrentDirectory, ".dms-worker-state.json")
+                : v;
         }
 
         public static string DmsWorkerInitialUpdatedAfter()
         {
-            return Environment.GetEnvironmentVariable("DMS_WORKER_INITIAL_UPDATED_AFTER");
+            var v = Env("DMS_WORKER_INITIAL_UPDATED_AFTER");
+            return string.IsNullOrEmpty(v) ? null : v;
         }
 
         public static bool DmsWorkerDryRun()
         {
-            return "1" == (Environment.GetEnvironmentVariable("DMS_WORKER_DRY_RUN") ?? "") ||
-                string.Equals("true", Environment.GetEnvironmentVariable("DMS_WORKER_DRY_RUN"), StringComparison.OrdinalIgnoreCase);
+            var v = Env("DMS_WORKER_DRY_RUN");
+            return "1" == v || string.Equals("true", v, StringComparison.OrdinalIgnoreCase);
         }
 
         public static bool DmsWorkerAllowCreateIfNotFound()
         {
-            return "1" == (Environment.GetEnvironmentVariable("DMS_WORKER_ALLOW_CREATE_DMS_DOCUMENT") ?? "") ||
-                string.Equals("true", Environment.GetEnvironmentVariable("DMS_WORKER_ALLOW_CREATE_DMS_DOCUMENT"), StringComparison.OrdinalIgnoreCase);
+            var v = Env("DMS_WORKER_ALLOW_CREATE_DMS_DOCUMENT");
+            return "1" == v || string.Equals("true", v, StringComparison.OrdinalIgnoreCase);
         }
 
-        /// <summary>
-        /// Optional MetaSonic qualifier ID for the boolean sync flag.
-        /// When set, writes "Ja" after a successful upload.
-        /// </summary>
         public static string MetasonicComstructSyncedQualifierId()
         {
-            return Environment.GetEnvironmentVariable("METASONIC_COMSTRUCT_SYNCED_QUALIFIER_ID") ?? string.Empty;
+            return Env("METASONIC_COMSTRUCT_SYNCED_QUALIFIER_ID");
         }
 
-        /// <summary>
-        /// Optional MetaSonic qualifier ID to store the Comstruct invoice URL.
-        /// When set, writes "https://app.comstruct.com/invoices/{id}" after a successful upload.
-        /// </summary>
         public static string MetasonicComstructUrlQualifierId()
         {
-            return Environment.GetEnvironmentVariable("METASONIC_COMSTRUCT_URL_QUALIFIER_ID") ?? string.Empty;
+            return Env("METASONIC_COMSTRUCT_URL_QUALIFIER_ID");
         }
 
-        /// <summary>
-        /// Database provider for direct BRZ SQL connections: <c>sqlserver</c> (default), <c>odbc</c>, <c>oledb</c>, or <c>odata</c>.
-        /// </summary>
         public static string BrzDbProvider()
         {
-            return (Environment.GetEnvironmentVariable("BRZ_DB_PROVIDER") ?? "sqlserver").Trim().ToLowerInvariant();
+            return Env("BRZ_DB_PROVIDER", "sqlserver").ToLowerInvariant();
         }
 
         public static string BrzOdataBaseUrl()
         {
-            return (Environment.GetEnvironmentVariable("BRZ_ODATA_URL") ?? "http://127.0.0.1/api/stammdaten/").TrimEnd('/') + "/";
+            return Env("BRZ_ODATA_URL", "http://127.0.0.1/api/stammdaten/").TrimEnd('/') + "/";
         }
 
         public static string BrzOdataUser()
         {
-            return Environment.GetEnvironmentVariable("BRZ_ODATA_USER") ?? string.Empty;
+            return Env("BRZ_ODATA_USER");
         }
 
         public static string BrzOdataPassword()
         {
-            return Environment.GetEnvironmentVariable("BRZ_ODATA_PASSWORD") ?? string.Empty;
+            return Env("BRZ_ODATA_PASSWORD");
         }
 
         public static string BrzOdataParent()
         {
-            return Environment.GetEnvironmentVariable("BRZ_ODATA_PARENT") ?? string.Empty;
+            return Env("BRZ_ODATA_PARENT");
         }
 
         public static string BrzOdataCompanyNumber()
         {
-            return Environment.GetEnvironmentVariable("BRZ_ODATA_BETRIEBSNUMMER") ?? string.Empty;
+            return Env("BRZ_ODATA_BETRIEBSNUMMER");
         }
 
-        /// <summary>
-        /// Connection string for the read-only BRZ database user (ADO.NET SqlClient, ODBC, or OleDb).
-        /// </summary>
         public static string BrzDbConnectionString()
         {
-            return Environment.GetEnvironmentVariable("BRZ_DB_CONNECTION_STRING") ?? string.Empty;
+            return Env("BRZ_DB_CONNECTION_STRING");
         }
 
         public static int BrzDbCommandTimeoutSeconds()
         {
             int n;
-            return Math.Max(5, int.TryParse(Environment.GetEnvironmentVariable("BRZ_DB_TIMEOUT_SECONDS"), out n) ? n : 60);
+            return Math.Max(5, int.TryParse(Env("BRZ_DB_TIMEOUT_SECONDS"), out n) ? n : 60);
         }
 
         public static string BrzSuppliersQuery()
         {
-            return Environment.GetEnvironmentVariable("BRZ_SQL_SUPPLIERS_QUERY") ?? string.Empty;
+            return Env("BRZ_SQL_SUPPLIERS_QUERY");
         }
 
         public static string BrzProjectsQuery()
         {
-            return Environment.GetEnvironmentVariable("BRZ_SQL_PROJECTS_QUERY") ?? string.Empty;
+            return Env("BRZ_SQL_PROJECTS_QUERY");
         }
 
         public static string BrzAccountsQuery()
         {
-            return Environment.GetEnvironmentVariable("BRZ_SQL_ACCOUNTS_QUERY") ?? string.Empty;
+            return Env("BRZ_SQL_ACCOUNTS_QUERY");
         }
 
         public static string BrzTaxCodesQuery()
         {
-            return Environment.GetEnvironmentVariable("BRZ_SQL_TAX_CODES_QUERY") ?? string.Empty;
+            return Env("BRZ_SQL_TAX_CODES_QUERY");
         }
 
         public static string BrzPaymentTermsQuery()
         {
-            return Environment.GetEnvironmentVariable("BRZ_SQL_PAYMENT_TERMS_QUERY") ?? string.Empty;
+            return Env("BRZ_SQL_PAYMENT_TERMS_QUERY");
         }
     }
 }

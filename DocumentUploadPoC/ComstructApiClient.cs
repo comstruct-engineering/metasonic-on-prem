@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Text;
 using System.Web.Script.Serialization;
 
@@ -17,19 +18,28 @@ namespace MetasonicDocumentUploadPoC
 
         public ComstructApiClient()
         {
-            var handler = new System.Net.Http.HttpClientHandler
+            var handler = new HttpClientHandler
             {
-                AutomaticDecompression = System.Net.DecompressionMethods.GZip | System.Net.DecompressionMethods.Deflate
+                AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate
             };
-            _http = new HttpClient(handler);
+            _http = new HttpClient(handler)
+            {
+                Timeout = TimeSpan.FromMinutes(5)
+            };
             _http.DefaultRequestHeaders.Add("x-api-key", DmsEnvironment.ComstructApiKey());
             _http.DefaultRequestHeaders.Add("Accept", "application/json");
         }
 
-        private static string InvoicesBasePath()
+        private static string ApiPath(string endpoint)
         {
             var p = DmsEnvironment.ComstructApiPrefix();
-            return string.IsNullOrEmpty(p) ? "/invoices" : "/" + p + "/invoices";
+            var clean = endpoint.TrimStart('/');
+            return string.IsNullOrEmpty(p) ? "/" + clean : "/" + p + "/" + clean;
+        }
+
+        private static string InvoicesBasePath()
+        {
+            return ApiPath("invoices");
         }
 
         public Dictionary<string, object> GetInvoiceById(string invoiceId)
@@ -42,14 +52,17 @@ namespace MetasonicDocumentUploadPoC
             return _json.DeserializeObject(body) as Dictionary<string, object>;
         }
 
-        public List<Dictionary<string, object>> ListInvoiceRowsForQueue()
+        /// <summary>
+        /// Lists all recent invoices from Comstruct (optionally filtered by status).
+        /// </summary>
+        public List<Dictionary<string, object>> ListInvoices(string statusFilter = null, int limit = 0)
         {
             var baseUrl = DmsEnvironment.ComstructBaseUrl();
-            var q = "limit=" + DmsEnvironment.ListLimit() + "&offset=0";
-            var qs = DmsEnvironment.QueueStatus();
-            if (!string.IsNullOrEmpty(qs))
+            int actualLimit = limit > 0 ? limit : DmsEnvironment.ListLimit();
+            var q = "limit=" + actualLimit + "&offset=0";
+            if (!string.IsNullOrEmpty(statusFilter))
             {
-                q = "status=" + Uri.EscapeDataString(qs) + "&" + q;
+                q = "status=" + Uri.EscapeDataString(statusFilter) + "&" + q;
             }
 
             var url = baseUrl + InvoicesBasePath() + "?" + q;
@@ -57,6 +70,123 @@ namespace MetasonicDocumentUploadPoC
             response.EnsureSuccessStatusCode();
             var body = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
             return ParseInvoiceRows(body);
+        }
+
+        public List<Dictionary<string, object>> ListInvoiceRowsForQueue()
+        {
+            return ListInvoices(DmsEnvironment.QueueStatus(), DmsEnvironment.ListLimit());
+        }
+
+        /// <summary>
+        /// Checks whether an invoice with the given <paramref name="externalId"/> (e.g. MetaSonic Document ID)
+        /// already exists in Comstruct via <c>GET /v1/workflows/status/{external_id}</c> or the invoice list.
+        /// </summary>
+        public bool InvoiceExistsByExternalId(string externalId, HashSet<string> knownExternalIds = null)
+        {
+            if (string.IsNullOrWhiteSpace(externalId)) return false;
+            if (knownExternalIds != null && knownExternalIds.Contains(externalId.Trim()))
+            {
+                return true;
+            }
+
+            var url = DmsEnvironment.ComstructBaseUrl() + ApiPath("workflows/status/" + Uri.EscapeDataString(externalId.Trim()));
+            var response = _http.GetAsync(url).GetAwaiter().GetResult();
+            if (response.StatusCode == HttpStatusCode.OK || response.StatusCode == HttpStatusCode.Conflict)
+            {
+                if (knownExternalIds != null) knownExternalIds.Add(externalId.Trim());
+                return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Checks whether a project exists in Comstruct by its <paramref name="externalId"/> or <paramref name="projectNumber"/>.
+        /// </summary>
+        public bool ProjectExists(string externalId, string projectNumber)
+        {
+            if (!string.IsNullOrWhiteSpace(externalId))
+            {
+                var urlExt = DmsEnvironment.ComstructBaseUrl() + ApiPath("projects/byExternalId/" + Uri.EscapeDataString(externalId.Trim()));
+                var respExt = _http.GetAsync(urlExt).GetAwaiter().GetResult();
+                if (respExt.StatusCode == HttpStatusCode.OK) return true;
+            }
+
+            if (!string.IsNullOrWhiteSpace(projectNumber))
+            {
+                var urlNum = DmsEnvironment.ComstructBaseUrl() + ApiPath("projects/byNumber/" + Uri.EscapeDataString(projectNumber.Trim()));
+                var respNum = _http.GetAsync(urlNum).GetAwaiter().GetResult();
+                if (respNum.StatusCode == HttpStatusCode.OK) return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Uploads a new invoice from MetaSonic into Comstruct with <paramref name="documentId"/> as <c>external_id</c>.
+        /// Tries <c>POST /v1/invoices/custom</c> (with preset headers <c>archivdocument</c>, <c>kreditorname</c>, <c>projekt</c>)
+        /// and falls back to <c>POST /v1/workflows/trigger</c> if the API key is customer-scoped.
+        /// </summary>
+        public string UploadInvoiceFromMetasonic(
+            string documentId,
+            byte[] fileBytes,
+            string fileName,
+            string supplierName,
+            string supplierNumber,
+            string projectNumber,
+            string invoiceNumber,
+            string invoiceDateIso,
+            double? netAmount,
+            double? grossAmount)
+        {
+            if (fileBytes == null || fileBytes.Length == 0)
+            {
+                throw new InvalidOperationException("Cannot upload empty file for MetaSonic document " + documentId);
+            }
+
+            var ext = MetasonicUploadHelper.DetectFileExtension(fileBytes);
+            var mediaType = (ext == ".tif" || ext == ".tiff") ? "image/tiff" : "application/pdf";
+
+            var customUrl = DmsEnvironment.ComstructBaseUrl() + ApiPath("invoices/custom");
+            var customReq = new HttpRequestMessage(HttpMethod.Post, customUrl);
+            customReq.Content = new ByteArrayContent(fileBytes);
+            customReq.Content.Headers.ContentType = new MediaTypeHeaderValue(mediaType);
+            customReq.Headers.TryAddWithoutValidation("archivdocument", documentId);
+            if (!string.IsNullOrWhiteSpace(supplierName))
+            {
+                customReq.Headers.TryAddWithoutValidation("kreditorname", supplierName.Trim());
+            }
+            if (!string.IsNullOrWhiteSpace(projectNumber))
+            {
+                customReq.Headers.TryAddWithoutValidation("projekt", projectNumber.Trim());
+            }
+
+            var customResp = _http.SendAsync(customReq).GetAwaiter().GetResult();
+            var customBody = customResp.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+            if (customResp.IsSuccessStatusCode)
+            {
+                return customBody;
+            }
+
+            // Fallback to POST /v1/workflows/trigger (customer-scoped API key)
+            var triggerPayload = new Dictionary<string, object>();
+            triggerPayload["external_id"] = documentId;
+            triggerPayload["base64document"] = Convert.ToBase64String(fileBytes);
+            triggerPayload["project_number"] = !string.IsNullOrWhiteSpace(projectNumber) ? projectNumber.Trim() : documentId;
+            triggerPayload["creditor_name"] = !string.IsNullOrWhiteSpace(supplierName) ? supplierName.Trim() : ("Kreditor " + documentId);
+            if (!string.IsNullOrWhiteSpace(supplierNumber))
+            {
+                triggerPayload["creditor_number"] = supplierNumber.Trim();
+            }
+            triggerPayload["invoice_number"] = !string.IsNullOrWhiteSpace(invoiceNumber) ? invoiceNumber.Trim() : documentId;
+            triggerPayload["invoice_date"] = !string.IsNullOrWhiteSpace(invoiceDateIso)
+                ? invoiceDateIso
+                : DateTime.UtcNow.ToString("yyyy-MM-dd");
+            triggerPayload["net_amount"] = netAmount ?? 0.0;
+            triggerPayload["total_amount"] = grossAmount ?? (netAmount ?? 0.0);
+            triggerPayload["tenant"] = DmsEnvironment.ComstructTenant();
+
+            return PostJson("workflows/trigger", triggerPayload);
         }
 
         private List<Dictionary<string, object>> ParseInvoiceRows(string json)
@@ -208,13 +338,6 @@ namespace MetasonicDocumentUploadPoC
                 var err = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
                 throw new InvalidOperationException("PATCH DMS failed HTTP " + (int)response.StatusCode + ": " + err);
             }
-        }
-
-        private static string ApiPath(string endpoint)
-        {
-            var p = DmsEnvironment.ComstructApiPrefix();
-            var clean = endpoint.TrimStart('/');
-            return string.IsNullOrEmpty(p) ? "/" + clean : "/" + p + "/" + clean;
         }
 
         private string PostJson(string endpoint, object payload)

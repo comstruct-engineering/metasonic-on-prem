@@ -33,9 +33,19 @@ namespace MetasonicDocumentUploadPoC
             if (args.Length > 0)
             {
                 var mode = (args[0] ?? string.Empty).ToLowerInvariant();
-                if (mode == "worker" || mode == "dms-worker")
+                if (mode == "worker" || mode == "dms-worker" || mode == "sync")
                 {
                     return DmsUploadWorker.Run();
+                }
+
+                if (mode == "inbound" || mode == "dms-inbound")
+                {
+                    return DmsUploadWorker.RunInboundOnly();
+                }
+
+                if (mode == "outbound" || mode == "dms-outbound")
+                {
+                    return DmsUploadWorker.RunOutboundOnly();
                 }
 
                 if (mode == "masterdata" || mode == "brz-sync")
