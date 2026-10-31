@@ -16,7 +16,8 @@ namespace MetasonicDocumentUploadPoC
 
         public static int GetItemTypeNumber(string fileName)
         {
-            var extension = Path.GetExtension(fileName)?.ToLowerInvariant();
+            var extRaw = Path.GetExtension(fileName);
+            var extension = extRaw != null ? extRaw.ToLowerInvariant() : string.Empty;
             if (extension == ".pdf") return 54;
             if (extension == ".tif" || extension == ".tiff") return 1;
             if (extension == ".jpg" || extension == ".jpeg") return 8;
@@ -36,60 +37,54 @@ namespace MetasonicDocumentUploadPoC
             return 54;
         }
 
-        /// <summary>
-        /// Detects the actual file type from magic bytes and returns the correct extension.
-        /// The Comstruct backend always reports .pdf as the filename even for TIFF files,
-        /// so we inspect the raw bytes to determine the true format.
-        /// </summary>
         public static string DetectFileExtension(byte[] data)
         {
             if (data == null || data.Length < 4) return ".pdf";
 
-            // PDF: %PDF
             if (data[0] == 0x25 && data[1] == 0x50 && data[2] == 0x44 && data[3] == 0x46)
                 return ".pdf";
 
-            // TIFF little-endian: II*\0
             if (data[0] == 0x49 && data[1] == 0x49 && data[2] == 0x2A && data[3] == 0x00)
                 return ".tif";
 
-            // TIFF big-endian: MM\0*
             if (data[0] == 0x4D && data[1] == 0x4D && data[2] == 0x00 && data[3] == 0x2A)
                 return ".tif";
 
-            // JPEG: FF D8 FF
             if (data[0] == 0xFF && data[1] == 0xD8 && data[2] == 0xFF)
                 return ".jpg";
 
-            // PNG: \x89PNG
             if (data[0] == 0x89 && data[1] == 0x50 && data[2] == 0x4E && data[3] == 0x47)
                 return ".png";
 
             return ".pdf";
         }
 
+        private static string GetInvoiceString(Dictionary<string, object> inv, string key)
+        {
+            if (inv != null && inv.ContainsKey(key) && inv[key] != null)
+            {
+                var s = Convert.ToString(inv[key]);
+                return s != null ? s.Trim() : null;
+            }
+
+            return null;
+        }
+
         public static RequestField[] BuildFieldsFromInvoiceJson(
-            System.Collections.Generic.Dictionary<string, object> inv,
+            Dictionary<string, object> inv,
             string metasonicCorrelationValue,
             string correlationQualifierIdOrNull)
         {
-            string GetS(string key)
-            {
-                return inv != null && inv.ContainsKey(key) && inv[key] != null
-                    ? Convert.ToString(inv[key])
-                    : null;
-            }
-
-            var fields = new System.Collections.Generic.List<RequestField>();
-            var supplier = GetS("supplier_name")?.Trim();
+            var fields = new List<RequestField>();
+            var supplier = GetInvoiceString(inv, "supplier_name");
             if (!string.IsNullOrEmpty(supplier))
             {
                 fields.Add(new RequestField { ID = QualKreditor, Value = supplier });
             }
 
-            var beleg = GetS("invoice_number")?.Trim()
-                ?? GetS("external_id")?.Trim()
-                ?? GetS("id");
+            var beleg = GetInvoiceString(inv, "invoice_number");
+            if (string.IsNullOrEmpty(beleg)) beleg = GetInvoiceString(inv, "external_id");
+            if (string.IsNullOrEmpty(beleg)) beleg = GetInvoiceString(inv, "id");
             if (!string.IsNullOrEmpty(beleg))
             {
                 fields.Add(new RequestField { ID = QualBelegnr, Value = beleg });
@@ -167,20 +162,16 @@ namespace MetasonicDocumentUploadPoC
             return client.SaveDocument(ref loginData, document);
         }
 
-        /// <summary>
-        /// Updates Comstruct-related qualifiers on an existing document via <c>SaveDocument</c> (fields only, no ItemList).
-        /// Merges the provided key/value pairs into the existing field list and saves in a single call.
-        /// </summary>
         public static void SetDocumentQualifiers(
             ScanviewWebserviceClient client,
             ref LoginData loginData,
             string docId,
-            System.Collections.Generic.Dictionary<string, string> updates)
+            Dictionary<string, string> updates)
         {
             var existing = client.GetDocument(ref loginData, docId, false, false, false, false);
 
-            var fieldMap = new System.Collections.Generic.Dictionary<string, string>();
-            if (existing?.FieldList != null)
+            var fieldMap = new Dictionary<string, string>();
+            if (existing != null && existing.FieldList != null)
             {
                 foreach (var f in existing.FieldList)
                 {
@@ -196,7 +187,7 @@ namespace MetasonicDocumentUploadPoC
                 fieldMap[kv.Key] = kv.Value;
             }
 
-            var fields = new System.Collections.Generic.List<RequestField>();
+            var fields = new List<RequestField>();
             foreach (var kv in fieldMap)
             {
                 fields.Add(new RequestField { ID = kv.Key, Value = kv.Value });
@@ -205,7 +196,7 @@ namespace MetasonicDocumentUploadPoC
             var document = new RequestDocument
             {
                 ID = docId,
-                DocClassID = existing?.DocClassID,
+                DocClassID = existing != null ? existing.DocClassID : null,
                 MainUserFolderID = null,
                 FieldList = fields.ToArray(),
                 ItemList = null
@@ -214,7 +205,6 @@ namespace MetasonicDocumentUploadPoC
             client.SaveDocument(ref loginData, document);
         }
 
-        /// <summary>Append a new PDF item via <c>AddItem</c> — existing attachments are left unchanged.</summary>
         public static ResponseItem AppendDocumentPdfItem(
             ScanviewWebserviceClient client,
             ref LoginData loginData,

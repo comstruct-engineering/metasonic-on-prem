@@ -5,18 +5,8 @@ using DmsFormular1.ScanviewWebservice;
 
 namespace MetasonicDocumentUploadPoC
 {
-    /// <summary>
-    /// Proof of Concept: Document Upload to Metasonic DMS via WCF
-    ///
-    /// This demonstrates how to:
-    /// 1. Authenticate with Metasonic Scanview DMS
-    /// 2. Create a new document with metadata (qualifiers)
-    /// 3. Upload a file (PDF, TIFF, etc.)
-    /// 4. Retrieve the new document ID
-    /// </summary>
     class Program
     {
-        // Environment configuration — set METASONIC_* (see config.env.example).
         private static string MetasonicEndpointInteractive()
         {
             var endpoint = Environment.GetEnvironmentVariable("METASONIC_ENDPOINT");
@@ -28,42 +18,115 @@ namespace MetasonicDocumentUploadPoC
             return "http://127.0.0.1:8089/ScanviewWebservice.svc";
         }
 
-        // Document class IDs (these would need to be confirmed with Metasonic)
-        private const string DOC_CLASS_INVOICE = "1"; // Example - needs verification
+        private const string DOC_CLASS_INVOICE = "1";
 
-        // Qualifier IDs from analysis
-        private const string QUALIFIER_KREDITOR = "89900207";  // Vendor/Creditor name
-        private const string QUALIFIER_BELEGNR = "89900202";   // Invoice number
-        private const string QUALIFIER_BETRAG = "89900131";    // Amount (net)
-        private const string QUALIFIER_SACHLICH = "223";       // Material verification
-        private const string QUALIFIER_PREISLICH = "222";      // Price verification
+        private const string QUALIFIER_KREDITOR = "89900207";
+        private const string QUALIFIER_BELEGNR = "89900202";
+        private const string QUALIFIER_BETRAG = "89900131";
+        private const string QUALIFIER_SACHLICH = "223";
+        private const string QUALIFIER_PREISLICH = "222";
 
         static int Main(string[] args)
         {
+            DmsEnvironment.LoadDotEnvIfPresent();
+
             if (args.Length > 0)
             {
                 var mode = (args[0] ?? string.Empty).ToLowerInvariant();
-                if (mode == "worker" || mode == "dms-worker")
+                if (mode == "worker" || mode == "dms-worker" || mode == "sync")
                 {
                     return DmsUploadWorker.Run();
+                }
+
+                if (mode == "inbound" || mode == "dms-inbound")
+                {
+                    return DmsUploadWorker.RunInboundOnly();
+                }
+
+                if (mode == "outbound" || mode == "dms-outbound")
+                {
+                    return DmsUploadWorker.RunOutboundOnly();
+                }
+
+                if (mode == "masterdata" || mode == "brz-sync")
+                {
+                    return BrzMasterDataWorker.Run();
+                }
+
+                if (mode == "db-test" || mode == "brz-test")
+                {
+                    return BrzMasterDataWorker.TestConnection();
+                }
+
+                if (mode == "db-tables" || mode == "brz-tables")
+                {
+                    var filter = args.Length > 1 ? args[1] : null;
+                    return BrzMasterDataWorker.ListTables(filter);
+                }
+
+                if (mode == "db-query" || mode == "brz-query" || mode == "brz-read")
+                {
+                    var sql = args.Length > 1 ? args[1] : null;
+                    var csvOut = args.Length > 2 ? args[2] : null;
+                    return BrzMasterDataWorker.RunQuery(sql, csvOut);
+                }
+
+                if (mode == "dms-login" || mode == "dms-test" || mode == "login-test")
+                {
+                    return MetasonicInspectHelper.DiagnoseLogin();
+                }
+
+                if (mode == "dms-classes" || mode == "docclasses" || mode == "inspect-classes")
+                {
+                    var dcId = args.Length > 1 ? args[1] : null;
+                    return MetasonicInspectHelper.InspectDocClasses(dcId);
+                }
+
+                if (mode == "dms-inspect" || mode == "inspect-doc" || mode == "accounting")
+                {
+                    var docId = args.Length > 1 ? args[1] : null;
+                    return MetasonicInspectHelper.InspectDocumentAndAccounting(docId);
+                }
+
+                if (mode == "dms-list" || mode == "dms-elements")
+                {
+                    var dcId = args.Length > 1 ? args[1] : "89035003";
+                    var csvOut = args.Length > 2 ? args[2] : null;
+                    return MetasonicInspectHelper.ListDocClassElements(dcId, csvOut, syncToComstruct: false);
+                }
+
+                if (mode == "dms-sync-projects" || mode == "dms-sync-kst")
+                {
+                    var dcId = args.Length > 1 ? args[1] : "89035003";
+                    return MetasonicInspectHelper.ListDocClassElements(dcId, null, syncToComstruct: true);
+                }
+
+                if (mode == "odata" || mode == "odata-query")
+                {
+                    var resource = args.Length > 1 ? args[1] : "Kostenstellen";
+                    var outFile = args.Length > 2 ? args[2] : null;
+                    return BrzOdataClient.QueryEndpoint(resource, outFile);
+                }
+
+                if (mode == "odata-sync")
+                {
+                    var resource = args.Length > 1 ? args[1] : "Kostenstellen";
+                    return BrzOdataClient.SyncToComstruct(resource);
                 }
             }
 
             Console.WriteLine("=== Metasonic DMS Document Upload - Proof of Concept ===\n");
             try
             {
-                // Step 1: Initialize WCF client
                 Console.WriteLine("Step 1: Initializing WCF client...");
                 var endpointResolved = MetasonicEndpointInteractive();
                 var client = CreateWcfClient();
-                Console.WriteLine($"✓ Connected to: {endpointResolved}\n");
+                Console.WriteLine("Connected to: " + endpointResolved + "\n");
 
-                // Step 2: Authenticate
                 Console.WriteLine("Step 2: Authenticating...");
                 var loginData = AuthenticateToMetasonic(client);
-                Console.WriteLine($"✓ Authenticated as: {loginData.Username}\n");
+                Console.WriteLine("Authenticated as: " + loginData.Username + "\n");
 
-                // Step 3: Prepare document metadata
                 Console.WriteLine("Step 3: Preparing document metadata...");
                 var documentMetadata = CreateDocumentMetadata(
                     docClassId: DOC_CLASS_INVOICE,
@@ -71,24 +134,22 @@ namespace MetasonicDocumentUploadPoC
                     belegNr: "INV-2026-001",
                     betrag: "1250.50"
                 );
-                Console.WriteLine("✓ Metadata prepared\n");
+                Console.WriteLine("Metadata prepared\n");
 
-                // Step 4: Prepare file for upload
                 Console.WriteLine("Step 4: Preparing file for upload...");
                 string testFilePath = GetTestFilePath(args);
 
                 if (!File.Exists(testFilePath))
                 {
-                    Console.WriteLine($"⚠ Warning: Test file not found at {testFilePath}");
+                    Console.WriteLine("Warning: Test file not found at " + testFilePath);
                     Console.WriteLine("Creating a dummy PDF for demonstration...");
                     testFilePath = CreateDummyPdf();
                 }
 
                 byte[] fileData = File.ReadAllBytes(testFilePath);
                 string fileName = Path.GetFileName(testFilePath);
-                Console.WriteLine($"✓ File loaded: {fileName} ({fileData.Length} bytes)\n");
+                Console.WriteLine("File loaded: " + fileName + " (" + fileData.Length + " bytes)\n");
 
-                // Step 5: Create document in DMS
                 Console.WriteLine("Step 5: Uploading document to Metasonic DMS...");
                 var newDocument = UploadDocument(
                     client,
@@ -98,38 +159,37 @@ namespace MetasonicDocumentUploadPoC
                     fileName
                 );
 
-                Console.WriteLine($"✓ Document uploaded successfully!");
-                Console.WriteLine($"✓ New Document ID: {newDocument.ID}\n");
+                Console.WriteLine("Document uploaded successfully!");
+                Console.WriteLine("New Document ID: " + newDocument.ID + "\n");
 
-                // Step 6: Verify upload by retrieving the document
                 Console.WriteLine("Step 6: Verifying upload...");
                 var retrievedDoc = client.GetDocument(ref loginData, newDocument.ID, false, false, true, false);
-                Console.WriteLine($"✓ Document retrieved: {retrievedDoc.ID}");
-                Console.WriteLine($"  - Number of fields: {retrievedDoc.FieldList?.Length ?? 0}");
-                Console.WriteLine($"  - Number of items: {retrievedDoc.ItemList?.Length ?? 0}");
+                Console.WriteLine("Document retrieved: " + retrievedDoc.ID);
+                Console.WriteLine("  - Number of fields: " + (retrievedDoc.FieldList != null ? retrievedDoc.FieldList.Length : 0));
+                Console.WriteLine("  - Number of items: " + (retrievedDoc.ItemList != null ? retrievedDoc.ItemList.Length : 0));
 
                 if (retrievedDoc.FieldList != null)
                 {
                     Console.WriteLine("\n  Stored qualifiers:");
                     foreach (var field in retrievedDoc.FieldList.Where(f => !string.IsNullOrEmpty(f.Value)))
                     {
-                        Console.WriteLine($"    - {field.ID}: {field.Value}");
+                        Console.WriteLine("    - " + field.ID + ": " + field.Value);
                     }
                 }
 
-                Console.WriteLine("\n✓ SUCCESS: Document upload PoC completed successfully!");
+                Console.WriteLine("\nSUCCESS: Document upload PoC completed successfully!");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"\n✗ ERROR: {ex.GetType().Name}");
-                Console.WriteLine($"Message: {ex.Message}");
+                Console.WriteLine("\nERROR: " + ex.GetType().Name);
+                Console.WriteLine("Message: " + ex.Message);
 
                 if (ex.InnerException != null)
                 {
-                    Console.WriteLine($"Inner Exception: {ex.InnerException.Message}");
+                    Console.WriteLine("Inner Exception: " + ex.InnerException.Message);
                 }
 
-                Console.WriteLine($"\nStack Trace:\n{ex.StackTrace}");
+                Console.WriteLine("\nStack Trace:\n" + ex.StackTrace);
                 return 1;
             }
 
@@ -138,25 +198,15 @@ namespace MetasonicDocumentUploadPoC
             return 0;
         }
 
-        /// <summary>
-        /// Creates WCF client for Metasonic Scanview service
-        /// </summary>
         private static ScanviewWebserviceClient CreateWcfClient()
         {
             string endpoint = MetasonicEndpointInteractive();
-
-            // Create client with BasicHttpBinding
-            var client = new ScanviewWebserviceClient(
+            return new ScanviewWebserviceClient(
                 "ScanviewWebserviceBasicHTTP",
                 endpoint
             );
-
-            return client;
         }
 
-        /// <summary>
-        /// Authenticates to Metasonic DMS and returns login session data
-        /// </summary>
         private static LoginData AuthenticateToMetasonic(ScanviewWebserviceClient client)
         {
             var username = Environment.GetEnvironmentVariable("METASONIC_USER");
@@ -190,9 +240,6 @@ namespace MetasonicDocumentUploadPoC
             return loginData;
         }
 
-        /// <summary>
-        /// Creates document metadata (qualifiers) for the new document
-        /// </summary>
         private static RequestField[] CreateDocumentMetadata(
             string docClassId,
             string kreditor,
@@ -209,9 +256,6 @@ namespace MetasonicDocumentUploadPoC
             };
         }
 
-        /// <summary>
-        /// Uploads a document with file and metadata to Metasonic DMS
-        /// </summary>
         private static ResponseDocument UploadDocument(
             ScanviewWebserviceClient client,
             LoginData loginData,
@@ -219,32 +263,26 @@ namespace MetasonicDocumentUploadPoC
             byte[] fileData,
             string fileName)
         {
-                var item = new RequestItem
-                {
-                    ItemData = fileData,
-                    ItemName = "Document",
-                    OriginalFileName = fileName,
-                    ItemTypeNumber = MetasonicUploadHelper.GetItemTypeNumber(fileName)
-                };
+            var item = new RequestItem
+            {
+                ItemData = fileData,
+                ItemName = "Document",
+                OriginalFileName = fileName,
+                ItemTypeNumber = MetasonicUploadHelper.GetItemTypeNumber(fileName)
+            };
 
-                // Create RequestDocument
-                var document = new RequestDocument
-                {
-                    ID = null, // Null/empty for new documents - DMS will assign ID
-                    DocClassID = DmsEnvironment.MetasonicDocClassId(),
-                    MainUserFolderID = null, // Optional - can be left null
-                    FieldList = metadata,
-                    ItemList = new[] { item }
-                };
+            var document = new RequestDocument
+            {
+                ID = null,
+                DocClassID = DmsEnvironment.MetasonicDocClassId(),
+                MainUserFolderID = null,
+                FieldList = metadata,
+                ItemList = new[] { item }
+            };
 
-                // Upload to DMS
-                var response = client.SaveDocument(ref loginData, document);
-                return response;
-            }
+            return client.SaveDocument(ref loginData, document);
+        }
 
-        /// <summary>
-        /// Gets test file path from command line args or uses default
-        /// </summary>
         private static string GetTestFilePath(string[] args)
         {
             if (args.Length > 0 && File.Exists(args[0]))
@@ -252,7 +290,6 @@ namespace MetasonicDocumentUploadPoC
                 return args[0];
             }
 
-            // Default test file locations
             string[] defaultPaths = {
                 @"C:\Temp\test.pdf",
                 @".\test.pdf",
@@ -267,17 +304,13 @@ namespace MetasonicDocumentUploadPoC
                 }
             }
 
-            return @".\test.pdf"; // Will trigger dummy file creation
+            return @".\test.pdf";
         }
 
-        /// <summary>
-        /// Creates a minimal valid PDF file for testing purposes
-        /// </summary>
         private static string CreateDummyPdf()
         {
             string filePath = Path.Combine(Path.GetTempPath(), "metasonic_test.pdf");
 
-            // Minimal valid PDF content
             string pdfContent = @"%PDF-1.4
 1 0 obj
 <<
@@ -338,7 +371,7 @@ startxref
 %%EOF";
 
             File.WriteAllText(filePath, pdfContent);
-            Console.WriteLine($"✓ Created dummy PDF at: {filePath}");
+            Console.WriteLine("Created dummy PDF at: " + filePath);
             return filePath;
         }
     }

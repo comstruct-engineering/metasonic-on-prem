@@ -3,7 +3,7 @@ setlocal
 cd /d "%~dp0"
 
 REM Build script for Metasonic Document Upload Worker
-REM Requires: .NET Framework 4.7.2 SDK or Visual Studio Build Tools
+REM Supports Visual Studio MSBuild OR the built-in Windows .NET Framework 4.0 MSBuild/CSC (zero install required).
 
 set NO_PAUSE=0
 if /I "%~1"=="--no-pause" set NO_PAUSE=1
@@ -58,16 +58,32 @@ if %ERRORLEVEL% EQU 0 (
     goto :build
 )
 
-echo ERROR: MSBuild not found!
-echo.
-echo Please install one of the following:
-echo - Visual Studio 2019 or 2022 (any edition)
-echo - Visual Studio Build Tools
-echo - .NET Framework 4.7.2 Developer Pack
-echo.
-echo Or ensure MSBuild is in your PATH
+REM Fallback to built-in Windows .NET Framework 4.0 csc.exe (pre-installed on every Windows Server)
+if exist "%WINDIR%\Microsoft.NET\Framework64\v4.0.30319\csc.exe" (
+    set CSC_PATH="%WINDIR%\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
+    goto :build_csc
+)
+if exist "%WINDIR%\Microsoft.NET\Framework\v4.0.30319\csc.exe" (
+    set CSC_PATH="%WINDIR%\Microsoft.NET\Framework\v4.0.30319\csc.exe"
+    goto :build_csc
+)
+
+echo ERROR: Neither MSBuild nor built-in .NET Framework v4.0 csc.exe was found!
 if "%NO_PAUSE%"=="0" pause
 exit /b 1
+
+:build_csc
+echo Using built-in Windows .NET compiler: %CSC_PATH%
+if not exist "bin\Debug" mkdir "bin\Debug"
+%CSC_PATH% /nologo /target:exe /out:"bin\Debug\MetasonicDocumentUploadPoC.exe" /r:System.dll /r:System.Core.dll /r:System.Data.dll /r:System.Net.Http.dll /r:System.Runtime.Serialization.dll /r:System.ServiceModel.dll /r:System.Web.Extensions.dll /r:System.Xml.dll /r:System.Xml.Linq.dll /r:Microsoft.CSharp.dll *.cs Properties\*.cs ScanviewWebservice\*.cs
+if %ERRORLEVEL% NEQ 0 (
+    echo.
+    echo ERROR: Compilation with csc.exe failed!
+    if "%NO_PAUSE%"=="0" pause
+    exit /b 1
+)
+if exist "App.config" copy /Y "App.config" "bin\Debug\MetasonicDocumentUploadPoC.exe.config" >nul
+goto :success
 
 :build
 echo Found MSBuild: %MSBUILD_PATH%
@@ -91,6 +107,7 @@ if %ERRORLEVEL% NEQ 0 (
     exit /b 1
 )
 
+:success
 echo.
 echo ========================================
 echo BUILD SUCCESSFUL
@@ -98,7 +115,5 @@ echo ========================================
 echo.
 echo Output: bin\Debug\MetasonicDocumentUploadPoC.exe
 echo.
-echo To run the DMS upload worker:
-echo   bin\Debug\MetasonicDocumentUploadPoC.exe worker
-echo.
 if "%NO_PAUSE%"=="0" pause
+exit /b 0

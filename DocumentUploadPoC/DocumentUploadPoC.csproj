@@ -48,9 +48,12 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Program.cs" />
+    <Compile Include="BrzMasterDataWorker.cs" />
+    <Compile Include="BrzOdataClient.cs" />
     <Compile Include="ComstructApiClient.cs" />
     <Compile Include="DmsEnvironment.cs" />
     <Compile Include="DmsUploadWorker.cs" />
+    <Compile Include="MetasonicInspectHelper.cs" />
     <Compile Include="MetasonicSearchHelper.cs" />
     <Compile Include="MetasonicUploadHelper.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

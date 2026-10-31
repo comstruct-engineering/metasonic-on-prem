@@ -43,6 +43,8 @@ namespace MetasonicCLI
 
         static int Main(string[] args)
         {
+            DmsEnvironment.LoadDotEnvIfPresent();
+
             if (args.Length == 0 || args[0] == "--help" || args[0] == "-h")
             {
                 ShowHelp();
@@ -66,6 +68,58 @@ namespace MetasonicCLI
                     case "worker":
                     case "dms-worker":
                         return DmsUploadWorker.Run();
+                    case "inbound":
+                    case "dms-inbound":
+                        return DmsUploadWorker.RunInboundOnly();
+                    case "outbound":
+                    case "dms-outbound":
+                        return DmsUploadWorker.RunOutboundOnly();
+                    case "masterdata":
+                    case "brz-sync":
+                        return BrzMasterDataWorker.Run();
+                    case "db-test":
+                    case "brz-test":
+                        return BrzMasterDataWorker.TestConnection();
+                    case "db-tables":
+                    case "brz-tables":
+                        return BrzMasterDataWorker.ListTables(args.Length > 1 ? args[1] : null);
+                    case "db-query":
+                    case "brz-query":
+                    case "brz-read":
+                        return BrzMasterDataWorker.RunQuery(
+                            args.Length > 1 ? args[1] : null,
+                            args.Length > 2 ? args[2] : null);
+                    case "dms-login":
+                    case "dms-test":
+                    case "login-test":
+                        return MetasonicInspectHelper.DiagnoseLogin();
+                    case "dms-classes":
+                    case "docclasses":
+                    case "inspect-classes":
+                        return MetasonicInspectHelper.InspectDocClasses(args.Length > 1 ? args[1] : null);
+                    case "dms-inspect":
+                    case "inspect-doc":
+                    case "accounting":
+                        return MetasonicInspectHelper.InspectDocumentAndAccounting(args.Length > 1 ? args[1] : null);
+                    case "dms-list":
+                    case "dms-elements":
+                        return MetasonicInspectHelper.ListDocClassElements(
+                            args.Length > 1 ? args[1] : "89035003",
+                            args.Length > 2 ? args[2] : null,
+                            syncToComstruct: false);
+                    case "dms-sync-projects":
+                    case "dms-sync-kst":
+                        return MetasonicInspectHelper.ListDocClassElements(
+                            args.Length > 1 ? args[1] : "89035003",
+                            null,
+                            syncToComstruct: true);
+                    case "odata":
+                    case "odata-query":
+                        return BrzOdataClient.QueryEndpoint(
+                            args.Length > 1 ? args[1] : "Kostenstellen",
+                            args.Length > 2 ? args[2] : null);
+                    case "odata-sync":
+                        return BrzOdataClient.SyncToComstruct(args.Length > 1 ? args[1] : "Kostenstellen");
                     default:
                         Console.WriteLine($"Unknown command: {command}");
                         Console.WriteLine("Use --help to see available commands");
@@ -97,6 +151,14 @@ COMMANDS:
   list <docid>                         List all qualifiers (same as get)
   search <correlationValue>             Find DMS doc by correlation field (e.g. external_id; see METASONIC_DMS_CORRELATION_KEY)
   worker                               Run Comstruct → MetaSonic DMS batch (see env in DocumentUploadPoC)
+  masterdata                           Run BRZ DB → Comstruct master data sync (suppliers, projects, accounts, tax codes, payment terms)
+  db-test                              Test read-only BRZ database connection (BRZ_DB_CONNECTION_STRING)
+  db-tables [filter]                   List tables/views accessible to the read-only BRZ user
+  db-query "<sql>" [output.csv]        Execute a read-only SQL query on BRZ and optionally export to CSV
+  dms-classes [docClassId]             List MetaSonic document classes, qualifier IDs/names, mandatory flags, SQL lookups & accounting classes
+  dms-inspect [docId]                  Inspect a MetaSonic document (all qualifiers with names, files, and GetAccountingTable Kontierung rows)
+  odata [endpoint] [out.csv|out.json]  Query local BRZ OData/REST Stammdaten service (e.g. Kostenstellen, Baustellen) and optionally export
+  odata-sync [endpoint]                Sync Kostenstellen/Baustellen from BRZ OData service to Comstruct projects
 
 OPTIONS:
   --env <test|live>      Reserved for future use; endpoint is METASONIC_ENDPOINT

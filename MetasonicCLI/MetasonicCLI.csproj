@@ -47,6 +47,12 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Program.cs" />
+    <Compile Include="..\DocumentUploadPoC\BrzMasterDataWorker.cs">
+      <Link>Shared\Dms\BrzMasterDataWorker.cs</Link>
+    </Compile>
+    <Compile Include="..\DocumentUploadPoC\BrzOdataClient.cs">
+      <Link>Shared\Dms\BrzOdataClient.cs</Link>
+    </Compile>
     <Compile Include="..\DocumentUploadPoC\ComstructApiClient.cs">
       <Link>Shared\Dms\ComstructApiClient.cs</Link>
     </Compile>
@@ -55,6 +61,9 @@
     </Compile>
     <Compile Include="..\DocumentUploadPoC\DmsUploadWorker.cs">
       <Link>Shared\Dms\DmsUploadWorker.cs</Link>
+    </Compile>
+    <Compile Include="..\DocumentUploadPoC\MetasonicInspectHelper.cs">
+      <Link>Shared\Dms\MetasonicInspectHelper.cs</Link>
     </Compile>
     <Compile Include="..\DocumentUploadPoC\MetasonicSearchHelper.cs">
       <Link>Shared\Dms\MetasonicSearchHelper.cs</Link>
